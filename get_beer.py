@@ -1,6 +1,7 @@
 import itertools
 import re
 import requests
+import sys
 
 # from bs4 import BeautifulSoup
 
@@ -101,8 +102,7 @@ def get_reviews_ratebeer(query):
     soup = soup_me(beerpage)
 
     # mean rating = "?" / 5 #"?/5.0"
-    rating = soup.find('a', attrs={'name': 'real average'}).strong.text.replace(
-        '/5.0')
+    rating = re.sub('\/5.0$', soup.find('a', attrs={'name': 'real average'}).strong.text)
 
     # abv = "?%"
     abv = soup.find('abbr', title='Alcohol By Volume').next.next.next.strong.text
@@ -113,8 +113,13 @@ def get_reviews_ratebeer(query):
 
     # where
 
+    beer_stats = {
+        'abv': abv,
+        'style': style#,
+        # 'where': where,
+    }
 
-# TODO get_beerpage, get_beerinfo
+    return rating, beer_stats
 
 
 def get_reviews_untappd(query):
@@ -157,6 +162,15 @@ def get_reviews_untappd(query):
     # long desc
     description = re.sub(re.compile(' Show Less$'), '', soup.find(
         'div', class_="beer-descrption-read-less").text.strip())
+
+    beer_stats = {
+        'abv': abv,
+        'style': style,
+        # 'where': where,
+        'description': description
+    }
+
+    return rating, beer_stats
 
 
 def get_reviews_beeradvocate(query):
@@ -203,3 +217,38 @@ def get_reviews_beeradvocate(query):
     # where = "state, country"
     where = ', '.join(tag.text for tag in soup('a', href=re.compile(
         '^/place/directory/.')))
+
+    beer_stats = {
+        'abv': abv,
+        'style': style,
+        'where': where
+    }
+
+    return rating, beer_stats
+
+
+def main(barquery):
+
+    D_ACTIONS = {
+        'untappd': get_reviews_untappd,
+        'ratebeer': get_reviews_ratebeer,
+        'beeradvocate': get_reviews_beeradvocate
+    }
+
+    barname, bar_url = get_bar(barquery)
+    beerlst = get_beers(bar_url)
+
+    print('__{}__'.format(barname).upper())
+
+    for beer in beerlst:
+        print(beer)
+        for site, action in D_ACTIONS.items():
+            rating, beer_stats = action(beer)
+            print('{}: {}'.format(site, rating))
+            print(beer_stats)
+
+
+if __name__ == '__main__':
+
+    barquery = ' '.join(sys.argv[1:])
+    main(barquery)

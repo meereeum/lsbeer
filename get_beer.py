@@ -53,7 +53,7 @@ def get_beers(bar_url):
 
 
 # TODO wrapper to grab key from SECRETS ?
-def get_reviews_ratebeer(query):
+def get_reviews_ratebeer(query, beerpage=None):
     """ Get beer stats
 
     :query: query beername str
@@ -99,6 +99,7 @@ def get_reviews_ratebeer(query):
     #     beer_id)).content, 'lxml')
     # soup = BeautifulSoup(requests.get(get_beerpage(query)).content, 'lxml')
     # soup = soup_me(get_beerpage(query))
+    beerpage = beerpage if beerpage is not None else get_beerpage(query)
     soup = soup_me(beerpage)
 
     # mean rating = "?" / 5 #"?/5.0"
@@ -122,7 +123,7 @@ def get_reviews_ratebeer(query):
     return rating, beer_stats
 
 
-def get_reviews_untappd(query):
+def get_reviews_untappd(query, beerpage=None):
     """ Get beer stats
 
     :query: query beername str
@@ -146,6 +147,7 @@ def get_reviews_untappd(query):
 
     # soup = BeautifulSoup(requests.get(get_beerpage(query)).content, 'lxml')
     # soup = soup_me(get_beerpage(query))
+    beerpage = beerpage if beerpage is not None else get_beerpage(query)
     soup = soup_me(beerpage)
 
     # mean rating = "?" / 5 #"?/5.0"
@@ -173,7 +175,7 @@ def get_reviews_untappd(query):
     return rating, beer_stats
 
 
-def get_reviews_beeradvocate(query):
+def get_reviews_beeradvocate(query, beerpage=None):
     """ Get beer stats
 
     :query: query beername str
@@ -203,6 +205,7 @@ def get_reviews_beeradvocate(query):
 
     # soup = BeautifulSoup(requests.get(get_beerpage(query)).content, 'lxml')
     # soup = soup_me(get_beerpage(query))
+    beerpage = beerpage if beerpage is not None else get_beerpage(query)
     soup = soup_me(beerpage)
 
     # mean rating = "?" / 5 #"?/5.0"
@@ -225,6 +228,49 @@ def get_reviews_beeradvocate(query):
     }
 
     return rating, beer_stats
+
+
+def get_beerpages_en_masse(query):
+    """Get beer pages via google search
+    """
+
+    D_SITES = {
+        'untappd': 'https://untappd.com/b/',
+        'ratebeer': 'https://www.ratebeer.com/beer/',
+        'beeradvocate': 'https://www.beeradvocate.com/beer/'
+    }
+
+    BASE_URL = 'https://www.google.com/search'
+    PARAMS = {'q': safe_encode(query)}
+
+    soup = soup_me(BASE_URL, PARAMS)
+
+    extract_url = lambda site: re.sub('\/url\?q=([^&]*)&.*', '\\1', soup.find(
+        'a', href=re.compile('^/url\?q={}'.format(site)))['href'])
+
+    return {k: extract_url(v) for k,v in D_SITES.items()}
+
+
+def alternate_main(barquery):
+
+    D_ACTIONS = {
+        'untappd': get_reviews_untappd,
+        'ratebeer': get_reviews_ratebeer,
+        'beeradvocate': get_reviews_beeradvocate
+    }
+
+    barname, bar_url = get_bar(barquery)
+    beerlst = get_beers(bar_url)
+
+    print('\n__{}__\n'.format(barname).upper())
+
+    for beer in beerlst:
+        print(beer)
+        for site, url in get_beerpages_en_masse(beer).items():
+            rating, beer_stats = D_ACTIONS[site](beer, beerpage=url)
+            print('{}: {}'.format(site, rating))
+            print(beer_stats)
+        print('')
 
 
 def main(barquery):
@@ -251,4 +297,5 @@ def main(barquery):
 if __name__ == '__main__':
 
     barquery = ' '.join(sys.argv[1:])
-    main(barquery)
+    # main(barquery)
+    alternate_main(barquery)

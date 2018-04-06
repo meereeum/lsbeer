@@ -2,33 +2,9 @@ import itertools
 import re
 import requests
 
-from bs4 import BeautifulSoup, element
+# from bs4 import BeautifulSoup
 
-
-def safe_encode(*args, pattern=' ', space_char='+'):
-    """default: replace spaces with '+'
-    """
-    # SPACE_CHAR = '+'
-    # return SPACE_CHAR.join(args).replace(' ', SPACE_CHAR)
-    return re.sub(re.compile(pattern),
-                  space_char,
-                  space_char.join(args),
-                  re.DOTALL)
-
-
-# def soup_me(base_url, params=None, headers=None):
-#     headers = headers if headers is not None else {'User-agent': 'shiffy47'}
-#     params = params if params is not None else {}
-
-#     soup = BeautifulSoup(requests.get(base_url, params,
-#                                       headers=headers).content, 'lxml')
-#     return soup
-
-def soup_me(*args, **kwargs):
-    DEFAULT = {'headers': {'User-agent': 'shiffy47'}}
-    kwargs = {**DEFAULT, **kwargs}
-
-    return BeautifulSoup(requests.get(*args, **kwargs).content, 'lxml')
+from utils import safe_encode, soup_me
 
 
 def get_bar(query):
@@ -56,8 +32,8 @@ def get_beers(bar_url):
     """
     bar_url -> list of beernames
     """
-    soup = BeautifulSoup(requests.get(bar_url).content, 'lxml')
-    soup = soup_me(BASE_URL.format('search'), PARAMS)
+    # soup = BeautifulSoup(requests.get(bar_url).content, 'lxml')
+    soup = soup_me(bar_url)
 
     beers = soup('a', href=re.compile('^/beers/'))
 
@@ -70,6 +46,7 @@ def get_beers(bar_url):
     #     list(_) for _ in itertools.zip_longest(
     #         *(tuple(info.strip() for info in get_beer_info(beer))
     #           for beer in beers), fillvalue=''))
+    # TODO
 
     return beer_names
 
@@ -120,7 +97,8 @@ def get_reviews_ratebeer(query):
     #     safe_encode(beername, pattern='[^\w\n]+', space_char='-'),
     #     beer_id)).content, 'lxml')
     # soup = BeautifulSoup(requests.get(get_beerpage(query)).content, 'lxml')
-    soup = soup_me(get_beerpage(query))
+    # soup = soup_me(get_beerpage(query))
+    soup = soup_me(beerpage)
 
     # mean rating = "?" / 5 #"?/5.0"
     rating = soup.find('a', attrs={'name': 'real average'}).strong.text.replace(
@@ -162,7 +140,8 @@ def get_reviews_untappd(query):
         return BASE_URL.format(top_hit.a['href'])
 
     # soup = BeautifulSoup(requests.get(get_beerpage(query)).content, 'lxml')
-    soup = soup_me(get_beerpage(query))
+    # soup = soup_me(get_beerpage(query))
+    soup = soup_me(beerpage)
 
     # mean rating = "?" / 5 #"?/5.0"
     rating = re.sub('[\(\)]', '',soup.find('span', class_='num').text)
@@ -209,7 +188,8 @@ def get_reviews_beeradvocate(query):
         return BASE_URL.format(relative_url)
 
     # soup = BeautifulSoup(requests.get(get_beerpage(query)).content, 'lxml')
-    soup = soup_me(get_beerpage(query))
+    # soup = soup_me(get_beerpage(query))
+    soup = soup_me(beerpage)
 
     # mean rating = "?" / 5 #"?/5.0"
     rating = soup.find('span', class_='ba-ravg').text

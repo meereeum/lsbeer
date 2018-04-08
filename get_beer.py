@@ -103,7 +103,7 @@ def get_reviews_ratebeer(query, beerpage=None):
     soup = soup_me(beerpage)
 
     # mean rating = "?" / 5 #"?/5.0"
-    rating = re.sub('\/5.0$', soup.find('a', attrs={'name': 'real average'}).strong.text)
+    rating = re.sub('\/5.0$', '', soup.find('a', attrs={'name': 'real average'}).strong.text)
 
     # abv = "?%"
     abv = soup.find('abbr', title='Alcohol By Volume').next.next.next.strong.text
@@ -162,7 +162,7 @@ def get_reviews_untappd(query, beerpage=None):
     # where
 
     # long desc
-    description = re.sub(re.compile(' Show Less$'), '', soup.find(
+    description = re.sub(re.compile(' ?Show Less$'), '', soup.find(
         'div', class_="beer-descrption-read-less").text.strip())
 
     beer_stats = {
@@ -251,6 +251,17 @@ def get_beerpages_en_masse(query):
     return {k: extract_url(v) for k,v in D_SITES.items()}
 
 
+def get_beerpages(query):
+
+    D_URLS = {
+        'untappd': get_reviews_untappd,
+        'ratebeer': get_reviews_ratebeer,
+        'beeradvocate': get_reviews_beeradvocate
+    }
+
+    return D_URLS
+
+
 def alternate_main(barquery):
 
     D_ACTIONS = {
@@ -261,6 +272,32 @@ def alternate_main(barquery):
 
     barname, bar_url = get_bar(barquery)
     beerlst = get_beers(bar_url)
+
+    print('\n__{}__\n'.format(barname).upper())
+
+    for beer in beerlst:
+        print(beer)
+        for site, url in get_beerpages_en_masse(beer).items():
+            rating, beer_stats = D_ACTIONS[site](beer, beerpage=url)
+            print('{}: {}'.format(site, rating))
+            print(beer_stats)
+        print('')
+
+
+def alternate_alternate_main(barquery):
+
+    D_ACTIONS = {
+        'untappd': get_reviews_untappd,
+        'ratebeer': get_reviews_ratebeer,
+        'beeradvocate': get_reviews_beeradvocate
+    }
+
+    # get beerpages
+
+    barname, bar_url = get_bar(barquery)
+    beerlst = get_beers(bar_url)
+
+    # print beerstats
 
     print('\n__{}__\n'.format(barname).upper())
 

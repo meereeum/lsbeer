@@ -3,22 +3,18 @@ import re
 import requests
 import sys
 
-# from bs4 import BeautifulSoup
+from CLIppy import safe_encode, soup_me
 
-from utils import safe_encode, soup_me
 
 
 def get_bar(query):
     """
     query -> (barname, bar_url)
     """
-    # BASE_URL = 'https://www.beermenus.com/search'
     BASE_URL = 'https://www.beermenus.com/{}'
     PARAMS = {'q': safe_encode(query)}
 
     soup = soup_me(BASE_URL.format('search'), PARAMS)
-    # soup = BeautifulSoup(requests.get(BASE_URL.format('search'),
-    #                                   PARAMS).content, 'lxml')
 
     top_hit = [match for match in soup('h3', class_='mb-0 text-normal')
                if match('a', href=re.compile('^/places/'))][0]
@@ -33,7 +29,6 @@ def get_beers(bar_url):
     """
     bar_url -> list of beernames
     """
-    # soup = BeautifulSoup(requests.get(bar_url).content, 'lxml')
     soup = soup_me(bar_url)
 
     beers = soup('a', href=re.compile('^/beers/'))
@@ -93,12 +88,6 @@ def get_reviews_ratebeer(query, beerpage=None):
             top_hit['id'])
 
     # get stats
-    # beername, beer_id = query2name_id(query)
-    # soup = BeautifulSoup(requests.get(BASE_URL.format(
-    #     safe_encode(beername, pattern='[^\w\n]+', space_char='-'),
-    #     beer_id)).content, 'lxml')
-    # soup = BeautifulSoup(requests.get(get_beerpage(query)).content, 'lxml')
-    # soup = soup_me(get_beerpage(query))
     beerpage = beerpage if beerpage is not None else get_beerpage(query)
     soup = soup_me(beerpage)
 
@@ -137,16 +126,12 @@ def get_reviews_untappd(query, beerpage=None):
         """
         PARAMS = {'q': safe_encode(query)}
 
-        # soup = BeautifulSoup(requests.get(BASE_URL.format('search'),
-        #                                   PARAMS).content, 'lxml')
         soup = soup_me(BASE_URL.format('search'), PARAMS)
 
         top_hit = soup.find('p', class_='name')
 
         return BASE_URL.format(top_hit.a['href'])
 
-    # soup = BeautifulSoup(requests.get(get_beerpage(query)).content, 'lxml')
-    # soup = soup_me(get_beerpage(query))
     beerpage = beerpage if beerpage is not None else get_beerpage(query)
     soup = soup_me(beerpage)
 
@@ -190,8 +175,6 @@ def get_reviews_beeradvocate(query, beerpage=None):
         PARAMS = {'q': safe_encode(query),
                   'qt': 'beer'}
 
-        # soup = BeautifulSoup(requests.get(BASE_URL.format('search'),
-        #                                   PARAMS).content, 'lxml')
         soup = soup_me(BASE_URL.format('search/'), PARAMS)
 
         try: # redirected directly to beerpage
@@ -203,8 +186,6 @@ def get_reviews_beeradvocate(query, beerpage=None):
 
         return BASE_URL.format(relative_url)
 
-    # soup = BeautifulSoup(requests.get(get_beerpage(query)).content, 'lxml')
-    # soup = soup_me(get_beerpage(query))
     beerpage = beerpage if beerpage is not None else get_beerpage(query)
     soup = soup_me(beerpage)
 

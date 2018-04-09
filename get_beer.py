@@ -9,7 +9,6 @@ from urllib.parse import unquote
 from CLIppy import flatten, safe_encode, soup_me
 
 
-
 def get_bar(query):
     """
     query -> (barname, bar_url)

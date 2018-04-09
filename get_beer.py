@@ -1,7 +1,10 @@
+from collections import defaultdict
 import itertools
+import json
 import re
 import requests
 import sys
+from urllib.parse import unquote
 
 from CLIppy import flatten, safe_encode, soup_me
 
@@ -16,8 +19,8 @@ def get_bar(query):
 
     soup = soup_me(BASE_URL.format('search'), PARAMS)
 
-    top_hit = [match for match in soup('h3', class_='mb-0 text-normal')
-               if match('a', href=re.compile('^/places/'))][0]
+    top_hit, *_ = [match for match in soup('h3', class_='mb-0 text-normal')
+                   if match('a', href=re.compile('^/places/'))]
 
     barname = top_hit.a.text
     bar_url = BASE_URL.format(top_hit.a['href'])
@@ -76,7 +79,7 @@ def get_reviews_ratebeer(query, beerpage=None):
         )
 
         if d_hits['totalCount'] == 0: # no match found
-            return # TODO
+            raise Exception
 
         top_hit = d_hits['items'][0]['beer']
 
@@ -88,11 +91,15 @@ def get_reviews_ratebeer(query, beerpage=None):
             top_hit['id'])
 
     # get stats
-    beerpage = beerpage if beerpage is not None else get_beerpage(query)
+    try:
+        beerpage = beerpage if beerpage is not None else get_beerpage(query)
+    except(Exception): # not found
+        return {}
+
     soup = soup_me(beerpage)
 
     # mean rating = "?" / 5 #"?/5.0"
-    rating = re.sub('\/5.0$', '', soup.find('a', attrs={'name': 'real average'}).strong.text)
+    rating = re.sub('\/5\.?0?$', '', soup.find('a', attrs={'name': 'real average'}).strong.text)
 
     # abv = "?%"
     abv = soup.find('abbr', title='Alcohol By Volume').next.next.next.strong.text
@@ -104,12 +111,14 @@ def get_reviews_ratebeer(query, beerpage=None):
     # where
 
     beer_stats = {
+        'rating': rating,
         'abv': abv,
         'style': style#,
         # 'where': where,
     }
 
-    return rating, beer_stats
+    return beer_stats
+    # return rating, beer_stats
 
 
 def get_reviews_untappd(query, beerpage=None):
@@ -132,7 +141,11 @@ def get_reviews_untappd(query, beerpage=None):
 
         return BASE_URL.format(top_hit.a['href'])
 
-    beerpage = beerpage if beerpage is not None else get_beerpage(query)
+    try:
+        beerpage = beerpage if beerpage is not None else get_beerpage(query)
+    except(AttributeError): # not found
+        return {}
+
     soup = soup_me(beerpage)
 
     # mean rating = "?" / 5 #"?/5.0"
@@ -151,13 +164,15 @@ def get_reviews_untappd(query, beerpage=None):
         'div', class_="beer-descrption-read-less").text.strip())
 
     beer_stats = {
+        'rating': rating,
         'abv': abv,
         'style': style,
         # 'where': where,
         'description': description
     }
 
-    return rating, beer_stats
+    # return rating, beer_stats
+    return beer_stats
 
 
 def get_reviews_beeradvocate(query, beerpage=None):
@@ -186,7 +201,11 @@ def get_reviews_beeradvocate(query, beerpage=None):
 
         return BASE_URL.format(relative_url)
 
-    beerpage = beerpage if beerpage is not None else get_beerpage(query)
+    try:
+        beerpage = beerpage if beerpage is not None else get_beerpage(query)
+    except(TypeError): # no hits
+        return {}
+
     soup = soup_me(beerpage)
 
     # mean rating = "?" / 5 #"?/5.0"
@@ -203,16 +222,20 @@ def get_reviews_beeradvocate(query, beerpage=None):
         '^/place/directory/.')))
 
     beer_stats = {
+        'rating': rating,
         'abv': abv,
         'style': style,
         'where': where
     }
 
-    return rating, beer_stats
+    # return rating, beer_stats
+    return beer_stats
 
 
 def get_beerpages_en_masse(query):
     """Get beer pages via google search
+
+    :returns: {site: beer_url} for subset of sites found
     """
 
     D_SITES = {
@@ -229,18 +252,26 @@ def get_beerpages_en_masse(query):
     extract_url = lambda site: re.sub('\/url\?q=([^&]*)&.*', '\\1', soup.find(
         'a', href=re.compile('^/url\?q={}'.format(site)))['href'])
 
-    return {k: extract_url(v) for k,v in D_SITES.items()}
+    D_URLS ={}
+    for k, v in D_SITES.items():
+        try:
+            D_URLS[k] = unquote(extract_url(v)) # fix % encoding
+        except(TypeError): # not found
+            pass
 
-
-def get_beerpages(query):
-
-    D_URLS = {
-        'untappd': get_reviews_untappd,
-        'ratebeer': get_reviews_ratebeer,
-        'beeradvocate': get_reviews_beeradvocate
-    }
-
+    # return {k: extract_url(v) for k,v in D_SITES.items()}
     return D_URLS
+
+
+# def get_beerpages(query):
+
+#     D_URLS = {
+#         'untappd': get_reviews_untappd,
+#         'ratebeer': get_reviews_ratebeer,
+#         'beeradvocate': get_reviews_beeradvocate
+#     }
+
+#     return D_URLS
 
 
 def alternate_main(barquery):
@@ -254,41 +285,79 @@ def alternate_main(barquery):
     barname, bar_url = get_bar(barquery)
     beerlst = get_beers(bar_url)
 
-    print('\n__{}__\n'.format(barname).upper())
+    # print('\n__{}__\n'.format(barname).upper())
+    header = barname.upper()
 
+    beerlines = []
     for beer in beerlst:
-        print(beer)
-        for site, url in get_beerpages_en_masse(beer).items():
-            rating, beer_stats = D_ACTIONS[site](beer, beerpage=url)
-            print('{}: {}'.format(site, rating))
-            print(beer_stats)
+
+        # beerlines.append(beer)
+
+        D_URLS = get_beerpages_en_masse(beer)
+
+        # for site, url in get_beerpages_en_masse(beer).items():
+            # rating, beer_stats = D_ACTIONS[site](beer, beerpage=url)
+
+        # d_reviews = {}
+        # d_stats_consensus = defaultdict(lambda: [])
+
+        # dictionary of stats dictionaries
+        d_stats = {
+            site: action(beer, beerpage=D_URLS.get(
+                site, None)) # fallback is beerpage-specific search
+            for site, action in D_ACTIONS.items()
+        }
+
+        if not d_stats: # no reviews found
+            print('\nskipping {}...\n'.format(beer))
+            continue
+
+        d_reviews = {k: v['rating'] for k,v in d_stats.items()
+                     if v} # skip empty / not found
+
+        # take consensus
+        # d_stats_squashed = {}
+
+        PATTERN = '~*~'
+        SPACER = '  '
+        SEP = '|'
+
+        # header
+        print('\n{pattern} {} {pattern} ({}, {})\n'.format(beer,
+                                                           d_stats['untappd']['style'],
+                                                           d_stats['untappd']['abv'],
+                                                           pattern=PATTERN))
+
+        # reviews
+        sitetxt = ''.join(
+            ('{spacer}',
+             '{spacer}{sep}{spacer}'.join(['({})'] * len(d_reviews)),
+             '{spacer}')).format(*d_reviews.keys(), spacer=SPACER, sep=SEP)
+        # sitetxt = '{spacer}({}){spacer}{sep}{spacer}({}){spacer}{sep}{spacer}({}){spacer}'.format(*d_reviews.keys(), spacer=SPACER, sep=SEP)
+
+        widths = (len(_) for _ in sitetxt.split(SEP))
+
+        reviewtxt = '{sep}'.join(['{:^{}}'] * len(d_reviews)).format(
+            *flatten(zip(d_reviews.values(), widths)), sep=SEP)
+        # reviewtxt = '{:^{}}{sep}{:^{}}{sep}{:^{}}'.format(
+        #     *flatten(zip(d_reviews.values(), widths)), sep=SEP)
+
+        print('\n'.join((reviewtxt, sitetxt)))
         print('')
+        # for site, action in D_ACTIONS.items():
+        #     url = D_URLS.get(site, None) # fallback is beerpage-specific search
+        #     # rating, beer_stats = action(beer, beerpage=url)
+        #     beer_stats = action(beer, beerpage=url)
+        #     # print('{}: {}'.format(site, beer_stats['rating']))
+        #     # if beer_stats:
+        #     #     print('{}:'.format(site))
+        #     #     print(beer_stats)
+        #     d_stats_consensus[site]
+        #     d_reviews[site] = beer_stats['rating']
 
+            # beerlines += ['{}: {}'.format(site, rating), beer_stats, '']
 
-def alternate_alternate_main(barquery):
-
-    D_ACTIONS = {
-        'untappd': get_reviews_untappd,
-        'ratebeer': get_reviews_ratebeer,
-        'beeradvocate': get_reviews_beeradvocate
-    }
-
-    # get beerpages
-
-    barname, bar_url = get_bar(barquery)
-    beerlst = get_beers(bar_url)
-
-    # print beerstats
-
-    print('\n__{}__\n'.format(barname).upper())
-
-    for beer in beerlst:
-        print(beer)
-        for site, url in get_beerpages_en_masse(beer).items():
-            rating, beer_stats = D_ACTIONS[site](beer, beerpage=url)
-            print('{}: {}'.format(site, rating))
-            print(beer_stats)
-        print('')
+    # print(''); pprint_header_with_lines(header, beerlines); print('')
 
 
 def main(barquery):
@@ -313,7 +382,11 @@ def main(barquery):
 
 
 if __name__ == '__main__':
-
     barquery = ' '.join(sys.argv[1:])
+
+    if not barquery:
+        print('\ncouldn\'t find that bar...\n')
+        sys.exit(0)
+
     # main(barquery)
     alternate_main(barquery)

@@ -1,58 +1,46 @@
 import argparse
 from collections import defaultdict
-import itertools
-import json
-import re
-import requests
-import sys
-from urllib.parse import unquote
 
 from tqdm import tqdm
 
-from CLIppy import flatten, get_from_file, safe_encode, soup_me
+from CLIppy import fail_gracefully, flatten, get_from_file, safe_encode, soup_me
 
-def get_bar(query):
+from scrapers import get_bar, get_beers, get_reviews_ratebeer, get_reviews_untappd, get_reviews_beeradvocate, get_beerpages_en_masse
+
+
+
+def populate_beer_dict(beerlst, verbose=False):
     """
-    query -> (barname, bar_url)
+    lst of beers -> beerdict of sitesdicts of statsdicts
     """
-    BASE_URL = 'https://www.beermenus.com/{}'
-    PARAMS = {'q': safe_encode(query)}
 
-    soup = soup_me(BASE_URL.format('search'), PARAMS)
+    D_ACTIONS = {
+        'untappd': get_reviews_untappd,
+        'ratebeer': get_reviews_ratebeer,
+        'beeradvocate': get_reviews_beeradvocate
+    }
 
-    try:
-        top_hit, *_ = [match for match in soup('h3', class_='mb-0 text-normal')
-                       if match('a', href=re.compile('^/places/'))]
-    except:
-        print('\ncouldn\'t find that bar...\n')
-        sys.exit(0)
+    def get_d_stats(beer):
 
-    barname = top_hit.a.text
-    bar_url = BASE_URL.format(top_hit.a['href'])
+        if verbose:
+            print('looking up {} drinkability...'.format(beer.upper()))
 
-    return barname, bar_url
+        # dictionary of stats dictionaries
+        d_stats = {
+            site: action(beer, beerpage=get_beerpages_en_masse(beer).get(
+                site, None)) # fallback is beerpage-specific search
+            for site, action in D_ACTIONS.items()
+        }
 
+        if verbose:
+            print('& done.')
 
-def get_beers(bar_url):
-    """
-    bar_url -> list of beernames
-    """
-    soup = soup_me(bar_url)
+        return d_stats
 
-    beers = soup('a', href=re.compile('^/beers/'))
+    # dict of sitedicts of statsdicts
+    d_beers = {beer: get_d_stats(beer) for beer in tqdm(beerlst)} # <- progress bar
 
-    beer_names = [beer.text for beer in beers]
-
-    # get_beer_info = lambda tag: tag.next.next.next.next.text.replace(
-    #     '\n','').split('·')
-
-    # beer_types, beer_abvs, beer_places = (
-    #     list(_) for _ in itertools.zip_longest(
-    #         *(tuple(info.strip() for info in get_beer_info(beer))
-    #           for beer in beers), fillvalue=''))
-    # TODO
-
-    return beer_names
+    return d_beers
 
 
 def get_beers_from_file(f):
@@ -62,237 +50,70 @@ def get_beers_from_file(f):
     return get_from_file(f=f)
 
 
-# TODO wrapper to grab key from SECRETS ?
-def get_reviews_ratebeer(query, beerpage=None):
-    """ Get beer stats
-
-    :query: query beername str
-    """
-    BASE_URL = 'https://www.ratebeer.com/beer/{}/{}/'
-
-    def get_beerpage(query):
-        """
-        :query: beername query str
-        :returns: (name, id)
-        """
-        BASE_URL_API = 'https://beta.ratebeer.com/v1/api/graphql/'
-
-        data = {
-            "query": "query beerSearch($query: String, $order: SearchOrder, $first: Int, $after: ID) { searchResultsArr: beerSearch(query: $query, order: $order, first: $first, after: $after) { totalCount last items { beer { id name overallScore ratingCount __typename } review { id score __typename } __typename   }   __typename } }",
-            "variables": {"query": query, "order": "MATCH", " first": 20},
-            "operationName":"beerSearch"
-        }
-        d_hits = (
-            requests
-            .post(BASE_URL_API,
-                data=json.dumps(data),
-                headers={"content-type": "application/json"})
-            .json()['data']['searchResultsArr']
-        )
-
-        if d_hits['totalCount'] == 0: # no match found
-            raise Exception
-
-        top_hit = d_hits['items'][0]['beer']
-
-        # beername = top_hit['name']
-        # beer_id = top_hit['id']
-
-        return BASE_URL.format(safe_encode(
-            top_hit['name'], pattern='[^\w\n]+', space_char='-'),
-            top_hit['id'])
-
-    # get stats
-    try:
-        beerpage = beerpage if beerpage is not None else get_beerpage(query)
-    except(Exception): # not found
-        return {}
-
-    soup = soup_me(beerpage)
-
-    # mean rating = "?" / 5 #"?/5.0"
-    rating = re.sub('\/5\.?0?$', '', soup.find('a', attrs={'name': 'real average'}).strong.text)
-
-    # abv = "?%"
-    abv = soup.find('abbr', title='Alcohol By Volume').next.next.next.strong.text
-
-    # style
-    style, = (tag.text for tag in soup('a', href=re.compile("^/beerstyles/"))
-              if tag.previous == 'Style: ')
-
-    # where
-
-    beer_stats = {
-        'rating': rating,
-        'abv': abv,
-        'style': style#,
-        # 'where': where,
-    }
-
-    return beer_stats
-    # return rating, beer_stats
 
 
-def get_reviews_untappd(query, beerpage=None):
-    """ Get beer stats
 
-    :query: query beername str
-    """
-    BASE_URL = 'https://untappd.com/{}'
-
-    def get_beerpage(query):
-        """
-        :query: beername query str
-        :returns: (name, id)
-        """
-        PARAMS = {'q': safe_encode(query)}
-
-        soup = soup_me(BASE_URL.format('search'), PARAMS)
-
-        top_hit = soup.find('p', class_='name')
-
-        return BASE_URL.format(top_hit.a['href'])
-
-    try:
-        beerpage = beerpage if beerpage is not None else get_beerpage(query)
-    except(AttributeError): # not found
-        return {}
-
-    soup = soup_me(beerpage)
-
-    # mean rating = "?" / 5 #"?/5.0"
-    rating = re.sub('[\(\)]', '',soup.find('span', class_='num').text)
-
-    # abv = "?%"
-    abv = re.sub(' ABV$', '', soup.find('p', class_='abv').text.strip())
-
-    # style
-    style = soup.find('p', class_='style').text
-
-    # where
-
-    # long desc
-    description = re.sub(re.compile(' ?Show Less$'), '', soup.find(
-        'div', class_="beer-descrption-read-less").text.strip())
-
-    beer_stats = {
-        'rating': rating,
-        'abv': abv,
-        'style': style,
-        # 'where': where,
-        'description': description
-    }
-
-    # return rating, beer_stats
-    return beer_stats
-
-
-def get_reviews_beeradvocate(query, beerpage=None):
-    """ Get beer stats
-
-    :query: query beername str
-    """
-    BASE_URL = 'https://www.beeradvocate.com/{}'
-
-    def get_beerpage(query):
-        """
-        :query: beername query str
-        :returns: (name, id)
-        """
-        PARAMS = {'q': safe_encode(query),
-                  'qt': 'beer'}
-
-        soup = soup_me(BASE_URL.format('search/'), PARAMS)
-
-        try: # redirected directly to beerpage
-            relative_url = re.match('^/beer/profile/', soup.find(
-                'input', attrs={'name': 'redirect'})['value']).string
-        except:
-            top_hit = soup.find('a', href=re.compile("^/beer/profile/"))
-            relative_url = top_hit['href']
-
-        return BASE_URL.format(relative_url)
-
-    try:
-        beerpage = beerpage if beerpage is not None else get_beerpage(query)
-    except(TypeError): # no hits
-        return {}
-
-    soup = soup_me(beerpage)
-
-    # mean rating = "?" / 5 #"?/5.0"
-    rating = soup.find('span', class_='ba-ravg').text
-
-    # abv = "?%"
-    abv = soup.find('b', text='Alcohol by volume (ABV):').next.next.strip()
-
-    # style
-    style = soup.find('b', text='Style:').next.next.next.text
-
-    # where = "state, country"
-    where = ', '.join(tag.text for tag in soup('a', href=re.compile(
-        '^/place/directory/.')))
-
-    beer_stats = {
-        'rating': rating,
-        'abv': abv,
-        'style': style,
-        'where': where
-    }
-
-    # return rating, beer_stats
-    return beer_stats
-
-
-def get_beerpages_en_masse(query):
-    """Get beer pages via google search
-
-    :returns: {site: beer_url} for subset of sites found
-    """
-
-    D_SITES = {
-        'untappd': 'https://untappd.com/b/',
-        'ratebeer': 'https://www.ratebeer.com/beer/',
-        'beeradvocate': 'https://www.beeradvocate.com/beer/'
-    }
-
-    BASE_URL = 'https://www.google.com/search'
-    PARAMS = {'q': safe_encode(query)}
-
-    soup = soup_me(BASE_URL, PARAMS)
-
-    extract_url = lambda site: re.sub('\/url\?q=([^&]*)&.*', '\\1', soup.find(
-        'a', href=re.compile('^/url\?q={}'.format(site)))['href'])
-
-    D_URLS ={}
-    for k, v in D_SITES.items():
         try:
-            D_URLS[k] = unquote(extract_url(v)) # fix % encoding
-        except(TypeError): # not found
-            pass
-
-    # return {k: extract_url(v) for k,v in D_SITES.items()}
-    return D_URLS
 
 
-# def get_beerpages(query):
+def print_fancy(beer, d_stats, sep='|', spacer='  '):
+    PATTERN = '~*~'
+    # SPACER = '  '
+    # SEP = '|'
 
-#     D_URLS = {
-#         'untappd': get_reviews_untappd,
-#         'ratebeer': get_reviews_ratebeer,
-#         'beeradvocate': get_reviews_beeradvocate
-#     }
+    # d_reviews = {k: v['rating'] for k,v in d_stats.items()
+    #              if v} # skip empty / not found
 
-#     return D_URLS
+    # header
+    print('\n{pattern} {} {pattern} ({}, {})\n'.format(beer,
+                                                       d_stats['untappd']['style'],
+                                                       d_stats['untappd']['abv'],
+                                                       pattern=PATTERN))
+
+    # reviews
+    sitetxt = ''.join(
+        ('{spacer}',
+         '{spacer}{sep}{spacer}'.join(['({})'] * len(d_stats)),
+         '{spacer}')).format(*d_stats.keys(), spacer=spacer, sep=sep)
+    # sitetxt = ''.join(
+    #     ('{spacer}',
+    #      '{spacer}{sep}{spacer}'.join(['({})'] * len(d_reviews)),
+    #      '{spacer}')).format(*d_reviews.keys(), spacer=SPACER, sep=SEP)
+    # sitetxt = '{spacer}({}){spacer}{sep}{spacer}({}){spacer}{sep}{spacer}({}){spacer}'.format(*d_reviews.keys(), spacer=SPACER, sep=SEP)
+
+    widths = (len(_) for _ in sitetxt.split(sep))
+
+    reviewtxt = '{sep}'.join(['{:^{}}'] * len(d_stats)).format(
+        *flatten(zip((stats.get('rating', '') for stats in d_stats.values()),
+                     widths)), sep=sep)
+    # reviewtxt = '{sep}'.join(['{:^{}}'] * len(d_reviews)).format(
+    #     *flatten(zip(d_reviews.values(), widths)), sep=SEP)
+    # reviewtxt = '{:^{}}{sep}{:^{}}{sep}{:^{}}'.format(
+    #     *flatten(zip(d_reviews.values(), widths)), sep=SEP)
+
+    print('\n'.join((reviewtxt, sitetxt)))
+    print()
 
 
-def alternate_main(barquery=None, beerfile=None, fancy=False, sorted_=False, verbose=False):
+def print_simple(beer, d_stats, maxwidth, sep='|', spacer='  '):
+    # SPACER = '  '
+    # SEP = '|'
 
-    D_ACTIONS = {
-        'untappd': get_reviews_untappd,
-        'ratebeer': get_reviews_ratebeer,
-        'beeradvocate': get_reviews_beeradvocate
-    }
+    reviewtxt = '{sep}'.join(['{:^6}'] * len(d_stats)).format(
+        *(stats.get('rating', '') for stats in d_stats.values()),
+        sep=sep)
+
+    print('[{}]{spacer}{:<{width}}{spacer}({}, {})'.format(reviewtxt,
+                                                           beer,
+                                                           d_stats['untappd']['style'].lower(),
+                                                           d_stats['untappd']['abv'],
+                                                           width=maxwidth,
+                                                           spacer=spacer))
+
+
+@fail_gracefully
+def alternate_main(barquery=None, beerfile=None, fancy=False, sorted_=False,
+                   sort_by=None, verbose=False):
 
     if barquery:
         barname, bar_url = get_bar(barquery)
@@ -302,24 +123,10 @@ def alternate_main(barquery=None, beerfile=None, fancy=False, sorted_=False, ver
         beerlst = get_beers_from_file(beerfile)
 
     print('\n what\'s on @ {} ?? \n'.format(barname.upper()))
-    # header = barname.upper()
 
-    def get_d_stats(beer):
-        if verbose:
-            print('looking up {} drinkability...'.format(beer.upper()))
-        # dictionary of stats dictionaries
-        d_stats = {
-            site: action(beer, beerpage=get_beerpages_en_masse(beer).get(
-                site, None)) # fallback is beerpage-specific search
-            for site, action in D_ACTIONS.items()
-        }
-        if verbose:
-            print('& done.')
-        return d_stats
+    d_beers = populate_beer_dict(beerlst, verbose=verbose)
+    print() # space after progress bar
 
-
-    # beerlines = []
-    d_beers = {beer: get_d_stats(beer) for beer in tqdm(beerlst)} # dict of sitedicts of statsdicts
 
     def get_avg_rating(beer):
         ratings = [float(d_stats['rating']) for d_stats in d_beers[beer].values()
@@ -329,14 +136,22 @@ def alternate_main(barquery=None, beerfile=None, fancy=False, sorted_=False, ver
         except(ZeroDivisionError):
             avg = -1 # no reviews found - list last
 
+    MAXWIDTH = max((len(beer) for beer in beerlst))
+    SPACER = '  '
+    SEP = '|'
+
         return avg
+    kwargs = {'spacer': SPACER, 'sep': SEP}
+    if print_simple:
+        kwargs['maxwidth'] = MAXWIDTH
 
     beerlst = (sorted(beerlst, key=lambda x: get_avg_rating(x), reverse=True) # best -> worst
-               if sorted_ else beerlst)
+    pprint = print_fancy if fancy else print_simple
 
-    MAXWIDTH = max((len(beer) for beer in beerlst))
+    # pprint = (print_fancy if fancy else
+    #           lambda *args, **kwargs: print_simple(
+    #               *args, **kwargs, maxwidth=MAXWIDTH))
 
-    print()
     for beer in beerlst:
 
         d_stats = d_beers[beer]
@@ -345,59 +160,15 @@ def alternate_main(barquery=None, beerfile=None, fancy=False, sorted_=False, ver
             print('\nskipping {}...\n'.format(beer))
             continue
 
-        d_reviews = {k: v['rating'] for k,v in d_stats.items()
-                     if v} # skip empty / not found
-
         # take consensus
         # d_stats_consensus = defaultdict(lambda: [])
         # d_stats_squashed = {defaultdict(lambda: [])}
 
-        if fancy:
-            PATTERN = '~*~'
-            SPACER = '  '
-            SEP = '|'
+        pprint(beer, d_stats, **kwargs)
 
-            # header
-            print('\n{pattern} {} {pattern} ({}, {})\n'.format(beer,
-                                                               d_stats['untappd']['style'],
-                                                               d_stats['untappd']['abv'],
-                                                               pattern=PATTERN))
-
-            # reviews
-            sitetxt = ''.join(
-                ('{spacer}',
-                '{spacer}{sep}{spacer}'.join(['({})'] * len(d_reviews)),
-                '{spacer}')).format(*d_reviews.keys(), spacer=SPACER, sep=SEP)
-            # sitetxt = '{spacer}({}){spacer}{sep}{spacer}({}){spacer}{sep}{spacer}({}){spacer}'.format(*d_reviews.keys(), spacer=SPACER, sep=SEP)
-
-            widths = (len(_) for _ in sitetxt.split(SEP))
-
-            reviewtxt = '{sep}'.join(['{:^{}}'] * len(d_reviews)).format(
-                *flatten(zip(d_reviews.values(), widths)), sep=SEP)
-            # reviewtxt = '{:^{}}{sep}{:^{}}{sep}{:^{}}'.format(
-            #     *flatten(zip(d_reviews.values(), widths)), sep=SEP)
-
-            print('\n'.join((reviewtxt, sitetxt)))
-            print()
-
-        else:
-            SPACER = '  '
-            SEP = '|'
-
-            reviewtxt = '{sep}'.join(['{:^6}'] * len(d_stats)).format(
-                *(stats.get('rating', '') for stats in d_stats.values()),
-                sep=SEP)
-
-            print('[{}]{spacer}{:<{width}}{spacer}({}, {})'.format(reviewtxt,
-                                                                   beer,
-                                                                   d_stats['untappd']['style'].lower(),
-                                                                   d_stats['untappd']['abv'],
-                                                                   width=MAXWIDTH,
-                                                                   spacer=SPACER))
-
-    if not fancy:
-        # print key
-        sites = D_ACTIONS.keys()
+    if not fancy: # print key
+        # sites = D_ACTIONS.keys()
+        sites = d_stats.keys() # leftover from leaky for-loop scope
         maxsitewidth = max((len(site) for site in sites))
         sitetxt = '{sep}'.join(['{:^{width}}'] * len(sites)).format(*sites,
                                                                     sep=SEP,

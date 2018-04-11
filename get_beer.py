@@ -19,8 +19,12 @@ def get_bar(query):
 
     soup = soup_me(BASE_URL.format('search'), PARAMS)
 
-    top_hit, *_ = [match for match in soup('h3', class_='mb-0 text-normal')
-                   if match('a', href=re.compile('^/places/'))]
+    try:
+        top_hit, *_ = [match for match in soup('h3', class_='mb-0 text-normal')
+                       if match('a', href=re.compile('^/places/'))]
+    except:
+        print('\ncouldn\'t find that bar...\n')
+        sys.exit(0)
 
     barname = top_hit.a.text
     bar_url = BASE_URL.format(top_hit.a['href'])

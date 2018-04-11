@@ -7,7 +7,7 @@ import requests
 import sys
 from urllib.parse import unquote
 
-from CLIppy import flatten, safe_encode, soup_me
+from tqdm import tqdm
 
 from CLIppy import flatten, get_from_file, safe_encode, soup_me
 
@@ -301,20 +301,45 @@ def alternate_main(barquery=None, beerfile=None, fancy=False, sorted_=False, ver
         barname = beerfile.split('_')[-1]
         beerlst = get_beers_from_file(beerfile)
 
-        D_URLS = get_beerpages_en_masse(beer)
+    print('\n what\'s on @ {} ?? \n'.format(barname.upper()))
+    # header = barname.upper()
 
-        # for site, url in get_beerpages_en_masse(beer).items():
-            # rating, beer_stats = D_ACTIONS[site](beer, beerpage=url)
-
-        # d_reviews = {}
-        # d_stats_consensus = defaultdict(lambda: [])
-
+    def get_d_stats(beer):
+        if verbose:
+            print('looking up {} drinkability...'.format(beer.upper()))
         # dictionary of stats dictionaries
         d_stats = {
-            site: action(beer, beerpage=D_URLS.get(
+            site: action(beer, beerpage=get_beerpages_en_masse(beer).get(
                 site, None)) # fallback is beerpage-specific search
             for site, action in D_ACTIONS.items()
         }
+        if verbose:
+            print('& done.')
+        return d_stats
+
+
+    # beerlines = []
+    d_beers = {beer: get_d_stats(beer) for beer in tqdm(beerlst)} # dict of sitedicts of statsdicts
+
+    def get_avg_rating(beer):
+        ratings = [float(d_stats['rating']) for d_stats in d_beers[beer].values()
+                   if d_stats] # skip empty / not found
+        try:
+            avg = sum(ratings) / len(ratings)
+        except(ZeroDivisionError):
+            avg = -1 # no reviews found - list last
+
+        return avg
+
+    beerlst = (sorted(beerlst, key=lambda x: get_avg_rating(x), reverse=True) # best -> worst
+               if sorted_ else beerlst)
+
+    MAXWIDTH = max((len(beer) for beer in beerlst))
+
+    print()
+    for beer in beerlst:
+
+        d_stats = d_beers[beer]
 
         if not d_stats: # no reviews found
             print('\nskipping {}...\n'.format(beer))
@@ -324,69 +349,60 @@ def alternate_main(barquery=None, beerfile=None, fancy=False, sorted_=False, ver
                      if v} # skip empty / not found
 
         # take consensus
-        # d_stats_squashed = {}
+        # d_stats_consensus = defaultdict(lambda: [])
+        # d_stats_squashed = {defaultdict(lambda: [])}
 
-        PATTERN = '~*~'
-        SPACER = '  '
-        SEP = '|'
+        if fancy:
+            PATTERN = '~*~'
+            SPACER = '  '
+            SEP = '|'
 
-        # header
-        print('\n{pattern} {} {pattern} ({}, {})\n'.format(beer,
-                                                           d_stats['untappd']['style'],
-                                                           d_stats['untappd']['abv'],
-                                                           pattern=PATTERN))
+            # header
+            print('\n{pattern} {} {pattern} ({}, {})\n'.format(beer,
+                                                               d_stats['untappd']['style'],
+                                                               d_stats['untappd']['abv'],
+                                                               pattern=PATTERN))
 
-        # reviews
-        sitetxt = ''.join(
-            ('{spacer}',
-             '{spacer}{sep}{spacer}'.join(['({})'] * len(d_reviews)),
-             '{spacer}')).format(*d_reviews.keys(), spacer=SPACER, sep=SEP)
-        # sitetxt = '{spacer}({}){spacer}{sep}{spacer}({}){spacer}{sep}{spacer}({}){spacer}'.format(*d_reviews.keys(), spacer=SPACER, sep=SEP)
+            # reviews
+            sitetxt = ''.join(
+                ('{spacer}',
+                '{spacer}{sep}{spacer}'.join(['({})'] * len(d_reviews)),
+                '{spacer}')).format(*d_reviews.keys(), spacer=SPACER, sep=SEP)
+            # sitetxt = '{spacer}({}){spacer}{sep}{spacer}({}){spacer}{sep}{spacer}({}){spacer}'.format(*d_reviews.keys(), spacer=SPACER, sep=SEP)
 
-        widths = (len(_) for _ in sitetxt.split(SEP))
+            widths = (len(_) for _ in sitetxt.split(SEP))
 
-        reviewtxt = '{sep}'.join(['{:^{}}'] * len(d_reviews)).format(
-            *flatten(zip(d_reviews.values(), widths)), sep=SEP)
-        # reviewtxt = '{:^{}}{sep}{:^{}}{sep}{:^{}}'.format(
-        #     *flatten(zip(d_reviews.values(), widths)), sep=SEP)
+            reviewtxt = '{sep}'.join(['{:^{}}'] * len(d_reviews)).format(
+                *flatten(zip(d_reviews.values(), widths)), sep=SEP)
+            # reviewtxt = '{:^{}}{sep}{:^{}}{sep}{:^{}}'.format(
+            #     *flatten(zip(d_reviews.values(), widths)), sep=SEP)
 
-        print('\n'.join((reviewtxt, sitetxt)))
-        print('')
-        # for site, action in D_ACTIONS.items():
-        #     url = D_URLS.get(site, None) # fallback is beerpage-specific search
-        #     # rating, beer_stats = action(beer, beerpage=url)
-        #     beer_stats = action(beer, beerpage=url)
-        #     # print('{}: {}'.format(site, beer_stats['rating']))
-        #     # if beer_stats:
-        #     #     print('{}:'.format(site))
-        #     #     print(beer_stats)
-        #     d_stats_consensus[site]
-        #     d_reviews[site] = beer_stats['rating']
+            print('\n'.join((reviewtxt, sitetxt)))
+            print()
 
-            # beerlines += ['{}: {}'.format(site, rating), beer_stats, '']
+        else:
+            SPACER = '  '
+            SEP = '|'
 
-    # print(''); pprint_header_with_lines(header, beerlines); print('')
+            reviewtxt = '{sep}'.join(['{:^6}'] * len(d_stats)).format(
+                *(stats.get('rating', '') for stats in d_stats.values()),
+                sep=SEP)
 
+            print('[{}]{spacer}{:<{width}}{spacer}({}, {})'.format(reviewtxt,
+                                                                   beer,
+                                                                   d_stats['untappd']['style'].lower(),
+                                                                   d_stats['untappd']['abv'],
+                                                                   width=MAXWIDTH,
+                                                                   spacer=SPACER))
 
-def main(barquery):
-
-    D_ACTIONS = {
-        'untappd': get_reviews_untappd,
-        'ratebeer': get_reviews_ratebeer,
-        'beeradvocate': get_reviews_beeradvocate
-    }
-
-    barname, bar_url = get_bar(barquery)
-    beerlst = get_beers(bar_url)
-
-    print('__{}__'.format(barname).upper())
-
-    for beer in beerlst:
-        print(beer)
-        for site, action in D_ACTIONS.items():
-            rating, beer_stats = action(beer)
-            print('{}: {}'.format(site, rating))
-            print(beer_stats)
+    if not fancy:
+        # print key
+        sites = D_ACTIONS.keys()
+        maxsitewidth = max((len(site) for site in sites))
+        sitetxt = '{sep}'.join(['{:^{width}}'] * len(sites)).format(*sites,
+                                                                    sep=SEP,
+                                                                    width=maxsitewidth + 2)
+        print('\n[{}]{spacer}=={spacer}key\n'.format(sitetxt, spacer=SPACER))
 
 
 def get_parser():

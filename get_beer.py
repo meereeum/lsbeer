@@ -1,3 +1,4 @@
+import argparse
 from collections import defaultdict
 import itertools
 import json
@@ -285,7 +286,7 @@ def get_beerpages_en_masse(query):
 #     return D_URLS
 
 
-def alternate_main(barquery=None, beerfile=None):
+def alternate_main(barquery=None, beerfile=None, fancy=False, sorted_=False, verbose=False):
 
     D_ACTIONS = {
         'untappd': get_reviews_untappd,
@@ -388,12 +389,34 @@ def main(barquery):
             print(beer_stats)
 
 
+def get_parser():
+
+    parser = argparse.ArgumentParser(description=(''))
+    parser.add_argument('bar', nargs='*')
+    parser.add_argument('-f', nargs='*', default=[],
+                        help='path/to/beerfile')
+    parser.add_argument('--fancy', action='store_true',
+                        help='~*~print fancy~*~ (default: false)')
+    parser.add_argument('--sorted', action='store_true',
+                        help='sort by average rating? (default: false)')
+    parser.add_argument('--verbose', action='store_true',
+                        help='verbose printing (e.g. for debugging)? (default: false)')
+    # parser.add_argument('--filter-by', type=float, default=0,
+    #                     help='minimum rating threshold (default: 0)')
+    return parser
+
+
 if __name__ == '__main__':
-    barquery = ' '.join(sys.argv[1:])
+    # parse args
+    args = get_parser().parse_args()
 
-    if not barquery:
-        print('\ncouldn\'t find that bar...\n')
-        sys.exit(0)
+    assert args.bar or args.f, 'must supply bar or path/to/beerfile.. u drinking already ?'
 
-    # main(barquery)
-    alternate_main(barquery)
+    barquery = ' '.join(args.bar)
+    beerfile = '\ '.join(args.f) # escape spaces
+
+    alternate_main(barquery=barquery,
+                   beerfile=beerfile,
+                   fancy=args.fancy,
+                   sorted_=args.sorted,
+                   verbose=args.verbose)

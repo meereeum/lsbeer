@@ -8,6 +8,7 @@ from urllib.parse import unquote
 
 from CLIppy import flatten, safe_encode, soup_me
 
+from CLIppy import flatten, get_from_file, safe_encode, soup_me
 
 def get_bar(query):
     """
@@ -47,6 +48,13 @@ def get_beers(bar_url):
     # TODO
 
     return beer_names
+
+
+def get_beers_from_file(f):
+    """
+    path/to/file -> list of beernames
+    """
+    return get_from_file(f=f)
 
 
 # TODO wrapper to grab key from SECRETS ?
@@ -273,7 +281,7 @@ def get_beerpages_en_masse(query):
 #     return D_URLS
 
 
-def alternate_main(barquery):
+def alternate_main(barquery=None, beerfile=None):
 
     D_ACTIONS = {
         'untappd': get_reviews_untappd,
@@ -281,16 +289,12 @@ def alternate_main(barquery):
         'beeradvocate': get_reviews_beeradvocate
     }
 
-    barname, bar_url = get_bar(barquery)
-    beerlst = get_beers(bar_url)
-
-    # print('\n__{}__\n'.format(barname).upper())
-    header = barname.upper()
-
-    beerlines = []
-    for beer in beerlst:
-
-        # beerlines.append(beer)
+    if barquery:
+        barname, bar_url = get_bar(barquery)
+        beerlst = get_beers(bar_url)
+    else:
+        barname = beerfile.split('_')[-1]
+        beerlst = get_beers_from_file(beerfile)
 
         D_URLS = get_beerpages_en_masse(beer)
 

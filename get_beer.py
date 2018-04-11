@@ -50,10 +50,38 @@ def get_beers_from_file(f):
     return get_from_file(f=f)
 
 
+def sort_beerlst(beerlst, d_beers, sorted_=False, sort_by=None):
+    assert sorted_ or sort_by, 'Specify sorting by average or by site..'
 
-
-
+    def get_avg_rating(beer):
+        ratings = [float(d_stats['rating']) for d_stats in d_beers[beer].values()
+                   if d_stats] # skip empty / not found
         try:
+            avg = sum(ratings) / len(ratings)
+        except(ZeroDivisionError):
+            avg = -1 # no reviews found - list last
+
+        return avg
+
+    def get_rating_by_site(beer, site):
+        try:
+            rating = d_beers[beer][site]['rating']
+        except(KeyError):
+            rating = -1 # no review found - list last
+
+        return rating
+
+    KEY = (get_avg_rating if sorted_ else                              # avg review
+           lambda x: (get_rating_by_site(x, sort_by), get_avg_rating)) # by site, then avg
+
+    # beerlst = (sorted(beerlst, key=KEY, reverse=True) # best -> worst
+    #            if (sorted_ or sort_by) else beerlst)
+    # beerlst = (sorted(beerlst, key=get_avg_rating, reverse=True) # best -> worst
+    #            if sorted_ else beerlst)
+    #
+    # return beerlst
+
+    return sorted(beerlst, key=KEY, reverse=True) # best -> worst
 
 
 def print_fancy(beer, d_stats, sep='|', spacer='  '):
@@ -127,25 +155,17 @@ def alternate_main(barquery=None, beerfile=None, fancy=False, sorted_=False,
     d_beers = populate_beer_dict(beerlst, verbose=verbose)
     print() # space after progress bar
 
-
-    def get_avg_rating(beer):
-        ratings = [float(d_stats['rating']) for d_stats in d_beers[beer].values()
-                   if d_stats] # skip empty / not found
-        try:
-            avg = sum(ratings) / len(ratings)
-        except(ZeroDivisionError):
-            avg = -1 # no reviews found - list last
+    beerlst = (sort_beerlst(beerlst, d_beers, sorted_=sorted_, sort_by=sort_by)
+               if (sorted_ or sort_by) else beerlst)
 
     MAXWIDTH = max((len(beer) for beer in beerlst))
     SPACER = '  '
     SEP = '|'
 
-        return avg
     kwargs = {'spacer': SPACER, 'sep': SEP}
     if print_simple:
         kwargs['maxwidth'] = MAXWIDTH
 
-    beerlst = (sorted(beerlst, key=lambda x: get_avg_rating(x), reverse=True) # best -> worst
     pprint = print_fancy if fancy else print_simple
 
     # pprint = (print_fancy if fancy else
@@ -186,6 +206,9 @@ def get_parser():
                         help='~*~print fancy~*~ (default: false)')
     parser.add_argument('--sorted', action='store_true',
                         help='sort by average rating? (default: false)')
+    parser.add_argument('--sort-by', default=None, # TODO
+                        choices=['untappd', 'ratebeer', 'beeradvocate'],
+                        help='ratings website to sort by? (default: none)')
     parser.add_argument('--verbose', action='store_true',
                         help='verbose printing (e.g. for debugging)? (default: false)')
     # parser.add_argument('--filter-by', type=float, default=0,
@@ -206,4 +229,5 @@ if __name__ == '__main__':
                    beerfile=beerfile,
                    fancy=args.fancy,
                    sorted_=args.sorted,
+                   sort_by=args.sort_by,
                    verbose=args.verbose)

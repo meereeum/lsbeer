@@ -1,5 +1,6 @@
 import argparse
 from collections import defaultdict
+import sys
 
 from tqdm import tqdm
 
@@ -140,24 +141,62 @@ def print_simple(beer, d_stats, maxwidth, sep='|', spacer='  '):
 
 
 @fail_gracefully
-def alternate_main(barquery=None, beerfile=None, fancy=False, sorted_=False,
-                   sort_by=None, verbose=False):
+def outer_main(barquery=None, beerfile=None, fancy=False, sorted_=False,
+               sort_by=None, filter_by=[], get_taps=True, get_cans=False,
+               verbose=False):
 
     if barquery:
         barname, bar_url = get_bar(barquery)
-        beerlst = get_beers(bar_url)
+        beerlst, n_on_tap = get_beers(bar_url)
     else:
         barname = beerfile.split('_')[-1]
         beerlst = get_beers_from_file(beerfile)
+        n_on_tap = len(beerlst)
 
     print('\n what\'s on @ {} ?? \n'.format(barname.upper()))
 
+    if beerfile or (barquery and get_taps):
+        beerlst_taps = beerlst[:n_on_tap]
+        alternate_main(beerlst_taps, fancy=fancy, sorted_=sorted_,
+                       sort_by=sort_by, filter_by=filter_by, verbose=verbose,
+                       with_key=(not get_cans))
+
+    if barquery and get_cans:
+        print('CANS & BOTTLES...')
+        beerlst_cans = beerlst[n_on_tap:]
+        alternate_main(beerlst_cans, fancy=fancy, sorted_=sorted_,
+                       sort_by=sort_by, filter_by=filter_by, verbose=verbose,
+                       with_key=get_taps)
+
+
+def word_intersection(*args):
+    """
+    strs / lists -> word intersection
+    """
+    args = ((arg.split() if isinstance(arg, str) else arg) # str -> list
+            for arg in args)
+    return set.intersection(*(set(arg) for arg in args))
+
+
+def alternate_main(beerlst, fancy=False, sorted_=False, sort_by=None,
+                   filter_by=[], verbose=False, with_key=False):
     d_beers = populate_beer_dict(beerlst, verbose=verbose)
     print() # space after progress bar
 
+    # filter
+    get_style = lambda x: d_beers[x]['untappd']['style']
+    beerlst = ([beer for beer in beerlst if word_intersection(get_style(beer),
+                                                              filter_by)]
+               if filter_by else beerlst)
+    if not beerlst:
+        print('overly filtered beers')
+        sys.exit(0)
+
+    # sort
     beerlst = (sort_beerlst(beerlst, d_beers, sorted_=sorted_, sort_by=sort_by)
                if (sorted_ or sort_by) else beerlst)
 
+    # print
     MAXWIDTH = max((len(beer) for beer in beerlst))
     SPACER = '  '
     SEP = '|'
@@ -186,7 +225,7 @@ def alternate_main(barquery=None, beerfile=None, fancy=False, sorted_=False,
 
         pprint(beer, d_stats, **kwargs)
 
-    if not fancy: # print key
+    if with_key and not fancy: # print key
         # sites = D_ACTIONS.keys()
         sites = d_stats.keys() # leftover from leaky for-loop scope
         maxsitewidth = max((len(site) for site in sites))
@@ -206,9 +245,15 @@ def get_parser():
                         help='~*~print fancy~*~ (default: false)')
     parser.add_argument('--sorted', action='store_true',
                         help='sort by average rating? (default: false)')
-    parser.add_argument('--sort-by', default=None, # TODO
+    parser.add_argument('--sort-by', default=None,
                         choices=['untappd', 'ratebeer', 'beeradvocate'],
                         help='ratings website to sort by? (default: none)')
+    parser.add_argument('--filter-by', nargs='*', default=[],
+                        help='style/s to filter by? (default: all styles)')
+    parser.add_argument('--just-cans', action='store_true',
+                        help='cans & bottles only ? (default: taps only)')
+    parser.add_argument('--all', action='store_true',
+                        help='taps AND cans & bottles ? (default: taps only)')
     parser.add_argument('--verbose', action='store_true',
                         help='verbose printing (e.g. for debugging)? (default: false)')
     # parser.add_argument('--filter-by', type=float, default=0,
@@ -225,9 +270,13 @@ if __name__ == '__main__':
     barquery = ' '.join(args.bar)
     beerfile = '\ '.join(args.f) # escape spaces
 
-    alternate_main(barquery=barquery,
-                   beerfile=beerfile,
-                   fancy=args.fancy,
-                   sorted_=args.sorted,
-                   sort_by=args.sort_by,
-                   verbose=args.verbose)
+    # alternate_main(barquery=barquery,
+    outer_main(barquery=barquery,
+               beerfile=beerfile,
+               fancy=args.fancy,
+               sorted_=args.sorted,
+               sort_by=args.sort_by,
+               filter_by=args.filter_by,
+               verbose=args.verbose,
+               get_taps=(not args.just_cans),
+               get_cans=(args.all or args.just_cans))

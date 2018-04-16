@@ -1,11 +1,11 @@
-# import itertools
+from itertools import chain
 import json
 import re
 import requests
 import sys
 from urllib.parse import unquote
 
-from CLIppy import safe_encode, soup_me
+from CLIppy import flatten, safe_encode, soup_me
 
 
 def get_bar(query):
@@ -41,14 +41,72 @@ def get_beers(bar_url):
     beer_names = [beer.text for beer in beers
                   if beer.text != 'more'] # extra beer link
 
-    # get_beer_info = lambda tag: tag.next.next.next.next.text.replace(
-    #     '\n','').split('·')
+    beer_infos = [info.text.split('\n') for info in
+                  soup('p', class_='caption text-gray mb-0')]
 
-    # beer_types, beer_abvs, beer_places = (
-    #     list(_) for _ in itertools.zip_longest(
-    #         *(tuple(info.strip() for info in get_beer_info(beer))
-    #           for beer in beers), fillvalue=''))
-    # TODO
+    beer_servinginfos = [info.text.split('\n') for info in
+                         soup('p', class_='caption text-right mb-0 last')]
+
+    for beer_data in (beer_infos, beer_servinginfos):
+        assert len(beer_names) == len(beer_data), '{} != {}'.format(
+            len(beer_names), len(beer_data))
+
+    def get_info(idx, infolst):
+        try:
+            info = infolst[idx].strip()
+        except(IndexError):
+            info = ''
+        return info
+
+    beer_infos = [tuple(get_info(i, info) for i in (1,3,5)) # beerstyle, abv, beerplace
+                  for info in beer_infos]
+    beer_servinginfos = [tuple(flatten(get_info(i, info).split(' ')
+                                       for i in (1,2))) # volume, servingtype, price
+                         for info in beer_servinginfos]
+
+    # beer_infos = [('','','') if len(info) < 6 else tuple(
+    #     info[i].strip() for i in (1,3,5)) # beerstyle, abv, beerplace
+    #               for info in beer_infos]
+
+    def to_dict(keys, values):
+        return {k: v for k, v in zip(keys, values) if v}
+
+    KEYS_INFO = ('style', 'abv', 'where')#, 'serving')
+    KEYS_SERVINGINFO = ('volume', 'type', 'price')
+
+    d_stats = {
+        beername: to_dict(
+            chain.from_iterable((KEYS_INFO, ('serving',))),
+            chain.from_iterable((beerinfo, (to_dict(
+                KEYS_SERVINGINFO, beerservinginfo),))))
+        for beername, beerinfo, beerservinginfo in zip(
+                beer_names, beer_infos, beer_servinginfos)
+    }
+
+    # d_stats = {
+    #     beername: to_dict(('style, abv', 'where', 'serving'),
+    #                       chain.from_iterable(beerinfo, (to_dict('volume', 'type', 'price'))))
+    #     for beername, beerinfo, beerservinginfo in zip(
+    #             beer_names, beer_infos, beer_servinginfos)
+    # }
+
+    # d_stats = {
+    #     beername: {k: v for k, v in zip(('style', 'abv', 'where', 'serving'),
+    #                                     chain.from_iterable(beerinfo) if v}
+    #     for beername, beerinfo, beerservinginfo in zip(
+    #             beer_names, beer_infos, beer_servinginfos)
+    # }
+
+    # d_stats = {
+    #     beername: {k: v for k, v in zip(('style', 'abv', 'where'),
+    #                                     beerinfo) if v}
+    #     for beername, beerinfo in zip(beer_names, beer_infos)
+    # }
+
+    # for beer, beerservinginfo in zip(beer_names, beer_servinginfos):
+    #     d_stats[beer]['serving'] = dict(
+    #         (k,v) for k, v in zip(('volume', 'type', 'price'),
+    #                               beerservinginfo) if v)
 
     n_on_tap = int(re.sub('.*On Tap: *(\d*).*', '\\1', soup.find(
         'div', class_='pure-u-1-2 text-right').text.strip()))

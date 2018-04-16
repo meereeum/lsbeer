@@ -8,6 +8,11 @@ from CLIppy import dedupe, fail_gracefully, flatten, get_from_file, safe_encode,
 
 from scrapers import get_bar, get_beers, get_reviews_ratebeer, get_reviews_untappd, get_reviews_beeradvocate, get_beerpages_en_masse
 
+D_ACTIONS = {
+    'untappd': get_reviews_untappd,
+    'ratebeer': get_reviews_ratebeer,
+    'beeradvocate': get_reviews_beeradvocate
+}
 
 
 def populate_beer_dict(beerlst, verbose=False):
@@ -15,11 +20,11 @@ def populate_beer_dict(beerlst, verbose=False):
     lst of beers -> beerdict of sitesdicts of statsdicts
     """
 
-    D_ACTIONS = {
-        'untappd': get_reviews_untappd,
-        'ratebeer': get_reviews_ratebeer,
-        'beeradvocate': get_reviews_beeradvocate
-    }
+    # D_ACTIONS = {
+    #     'untappd': get_reviews_untappd,
+    #     'ratebeer': get_reviews_ratebeer,
+    #     'beeradvocate': get_reviews_beeradvocate
+    # }
 
     def get_d_stats(beer):
 
@@ -131,8 +136,12 @@ def print_simple(beer, d_stats, maxwidth, sep='|', spacer='  '):
     # SPACER = '  '
     # SEP = '|'
 
+    # reviewtxt = '{sep}'.join(['{:^6}'] * len(d_stats)).format(
+    #     *(stats.get('rating', '') for stats in d_stats.values()),
+    #     sep=sep)
     reviewtxt = '{sep}'.join(['{:^6}'] * len(d_stats)).format(
-        *(stats.get('rating', '') for stats in d_stats.values()),
+        *(stats.get('rating', '') for site, stats in d_stats.items()
+          if site in D_ACTIONS.keys()), # rating stes only
         sep=sep)
 
     print('[{}]{spacer}{:<{width}}{spacer}({}, {})'.format(reviewtxt,
@@ -150,26 +159,40 @@ def outer_main(barquery=None, beerfile=None, fancy=False, sorted_=False,
 
     if barquery:
         barname, bar_url = get_bar(barquery)
-        beerlst, n_on_tap = get_beers(bar_url)
+        # beerlst, n_on_tap = get_beers(bar_url)
+        d_beers_beermenus, n_on_tap = get_beers(bar_url)
+        beerlst = list(d_beers.keys())
     else:
         barname = beerfile.split('_')[-1]
         beerlst = get_beers_from_file(beerfile)
-        n_on_tap = len(beerlst)
+        d_beers_beermenus = {}; n_on_tap = len(beerlst)
 
     print('\n what\'s on @ {} ?? \n'.format(barname.upper()))
 
+    kwargs = {
+        'd_beers_beermenus': d_beers_beermenus,
+        'fancy': fancy,
+        'sorted_': sorted_,
+        'sort_by': sort_by,
+        'filter_by': filter_by
+        'verbose': verbose
+    }
+
     if beerfile or (barquery and get_taps):
         beerlst_taps = beerlst[:n_on_tap]
-        alternate_main(beerlst_taps, fancy=fancy, sorted_=sorted_,
-                       sort_by=sort_by, filter_by=filter_by, verbose=verbose,
-                       with_key=(not get_cans))
+        alternate_main(beerlst_taps, with_key=(not get_cans), **kwargs)
+        # alternate_main(beerlst_taps, d_beers_extra=d_beers_beermenus,
+        #                fancy=fancy, sorted_=sorted_, sort_by=sort_by,
+        #                filter_by=filter_by, verbose=verbose,
+        #                with_key=(not get_cans))
 
     if barquery and get_cans:
         print('CANS & BOTTLES...')
         beerlst_cans = beerlst[n_on_tap:]
-        alternate_main(beerlst_cans, fancy=fancy, sorted_=sorted_,
-                       sort_by=sort_by, filter_by=filter_by, verbose=verbose,
-                       with_key=get_taps)
+        alternate_main(beerlst_cans, with_key=get_cans, **kwargs)
+        # alternate_main(beerlst_cans, d_beers_extra=d_beers_beermenus, fancy=fancy, sorted_=sorted_,
+        #                sort_by=sort_by, filter_by=filter_by, verbose=verbose,
+        #                with_key=get_taps)
 
 
 def word_intersection(*args):
@@ -183,9 +206,11 @@ def word_intersection(*args):
 
 
 def alternate_main(beerlst, fancy=False, sorted_=False, sort_by=None,
-                   filter_by=[], verbose=False, with_key=False):
+                   filter_by=[], d_beers_beermenus={}, verbose=False, with_key=False):
     beerlst = dedupe(beerlst) # occasional conflict b/w taps vs growlers
     d_beers = populate_beer_dict(beerlst, verbose=verbose)
+    d_beers.update(((beer, {'beermenus': d_beers_beermenus.get(beer,{})})
+                   for beer in beerlst))
     print() # space after progress bar
 
     # filter
@@ -231,8 +256,8 @@ def alternate_main(beerlst, fancy=False, sorted_=False, sort_by=None,
         pprint(beer, d_stats, **kwargs)
 
     if with_key and not fancy: # print key
-        # sites = D_ACTIONS.keys()
-        sites = d_stats.keys() # leftover from leaky for-loop scope
+        sites = D_ACTIONS.keys()
+        # sites = d_stats.keys() # leftover from leaky for-loop scope
         maxsitewidth = max((len(site) for site in sites))
         sitetxt = '{sep}'.join(['{:^{width}}'] * len(sites)).format(*sites,
                                                                     sep=SEP,
@@ -249,7 +274,8 @@ def get_parser():
     parser.add_argument('--sorted', action='store_true',
                         help='sort by average rating? (default: false)')
     parser.add_argument('--sort-by', default=None,
-                        choices=['untappd', 'ratebeer', 'beeradvocate'],
+                        choices=D_ACTIONS.keys(),
+                        # choices=['untappd', 'ratebeer', 'beeradvocate'],
                         help='ratings website to sort by? (default: none)')
     parser.add_argument('--filter-by', nargs='*', default=[],
                         help='style/s to filter by? (default: all styles)')

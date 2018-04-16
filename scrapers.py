@@ -60,32 +60,40 @@ def get_beers(bar_url):
 
     beer_infos = [tuple(get_info(i, info) for i in (1,3,5)) # beerstyle, abv, beerplace
                   for info in beer_infos]
-    beer_servinginfos = [tuple(flatten(get_info(i, info).split(' ')
+    beer_servinginfos = [tuple(flatten(get_info(i, info).lower().split(' ')
                                        for i in (1,2))) # volume, servingtype, price
                          for info in beer_servinginfos]
-
-    # beer_infos = [('','','') if len(info) < 6 else tuple(
-    #     info[i].strip() for i in (1,3,5)) # beerstyle, abv, beerplace
-    #               for info in beer_infos]
-
-    def to_dict(keys, values):
-        return {k: v for k, v in zip(keys, values) if v}
 
     KEYS_INFO = ('style', 'abv', 'where')#, 'serving')
     KEYS_SERVINGINFO = ('volume', 'type', 'price')
 
+    to_dict = lambda ks, vs: {k: v for k,v in zip(ks,vs) if v is not ''}
+
     d_stats = {
         beername: to_dict(
-            chain.from_iterable((KEYS_INFO, ('serving',))),
-            chain.from_iterable((beerinfo, (to_dict(
-                KEYS_SERVINGINFO, beerservinginfo),))))
-        for beername, beerinfo, beerservinginfo in zip(
-                beer_names, beer_infos, beer_servinginfos)
+            chain(KEYS_INFO, ('serving',)),
+            chain(info, ([],))
+        ) for beername, info in zip(beer_names, beer_infos)
     }
+    for beername, servinginfo in zip(beer_names, beer_servinginfos):
+        d_stats[beername]['serving'].append(to_dict(KEYS_SERVINGINFO, servinginfo))
+
+    # d_stats = {
+    #     beername: to_dict(KEYS_INFO, beerinfo)
+    #     for beername, beerinfo in zip(beer_names, beer_infos)
+    # }
+    # d_stats = {
+    #     beername: to_dict(
+    #         chain(keys_info, ('serving',)),
+    #         chain(beerinfo, (to_dict(
+    #             keys_servinginfo, beerservinginfo),)))
+    #     for beername, beerinfo, beerservinginfo in zip(
+    #             beer_names, beer_infos, beer_servinginfos)
+    # }
 
     # d_stats = {
     #     beername: to_dict(('style, abv', 'where', 'serving'),
-    #                       chain.from_iterable(beerinfo, (to_dict('volume', 'type', 'price'))))
+    #                       chain(beerinfo, (to_dict('volume', 'type', 'price'))))
     #     for beername, beerinfo, beerservinginfo in zip(
     #             beer_names, beer_infos, beer_servinginfos)
     # }
@@ -108,11 +116,13 @@ def get_beers(bar_url):
     #         (k,v) for k, v in zip(('volume', 'type', 'price'),
     #                               beerservinginfo) if v)
 
-    n_on_tap = int(re.sub('.*On Tap: *(\d*).*', '\\1', soup.find(
-        'div', class_='pure-u-1-2 text-right').text.strip()))
+    # n_on_tap = int(re.sub('.*On Tap: *(\d*).*', '\\1', soup.find(
+    #     'div', class_='pure-u-1-2 text-right').text.strip()))
 
+    # TODO
     # return beer_names
-    return beer_names, n_on_tap
+    # return beer_names, n_on_tap
+    return d_stats
 
 
 # TODO wrapper to grab key from SECRETS ?

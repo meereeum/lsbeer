@@ -2,6 +2,7 @@ import argparse
 from collections import defaultdict
 import sys
 
+import more_itertools
 from tqdm import tqdm
 
 from CLIppy import dedupe, fail_gracefully, flatten, get_from_file, safe_encode, soup_me
@@ -160,12 +161,21 @@ def outer_main(barquery=None, beerfile=None, fancy=False, sorted_=False,
     if barquery:
         barname, bar_url = get_bar(barquery)
         # beerlst, n_on_tap = get_beers(bar_url)
-        d_beers_beermenus, n_on_tap = get_beers(bar_url)
-        beerlst = list(d_beers.keys())
+        # d_beers_beermenus, n_on_tap = get_beers(bar_url)
+        # beerlst = list(d_beers.keys())
+        d_beers_beermenus = get_beers(bar_url)
+        # beerlst = list(d_beers.keys())
+
+        isnt_on_tap = lambda beer: (
+            'draft' not in set(d['type'] for d in d_stats[beer]['serving']))
+        # on_draft, not_on_draft = more_itertools.partition(isnt_on_tap, d_stats.keys())
+        beerlst, rest = more_itertools.partition(isnt_on_tap, d_stats.keys())
+
     else:
         barname = beerfile.split('_')[-1]
         beerlst = get_beers_from_file(beerfile)
-        d_beers_beermenus = {}; n_on_tap = len(beerlst)
+        # on_draft = get_beers_from_file(beerfile)
+        d_beers_beermenus = {}#; n_on_tap = len(beerlst)
 
     print('\n what\'s on @ {} ?? \n'.format(barname.upper()))
 
@@ -179,7 +189,8 @@ def outer_main(barquery=None, beerfile=None, fancy=False, sorted_=False,
     }
 
     if beerfile or (barquery and get_taps):
-        beerlst_taps = beerlst[:n_on_tap]
+        # beerlst_taps = beerlst[:n_on_tap]
+        beerlst_taps = beerlst #on_draft
         alternate_main(beerlst_taps, with_key=(not get_cans), **kwargs)
         # alternate_main(beerlst_taps, d_beers_extra=d_beers_beermenus,
         #                fancy=fancy, sorted_=sorted_, sort_by=sort_by,
@@ -188,7 +199,8 @@ def outer_main(barquery=None, beerfile=None, fancy=False, sorted_=False,
 
     if barquery and get_cans:
         print('CANS & BOTTLES...')
-        beerlst_cans = beerlst[n_on_tap:]
+        # beerlst_cans = beerlst[n_on_tap:]
+        beerlst_cans = rest #not_on_draft
         alternate_main(beerlst_cans, with_key=get_cans, **kwargs)
         # alternate_main(beerlst_cans, d_beers_extra=d_beers_beermenus, fancy=fancy, sorted_=sorted_,
         #                sort_by=sort_by, filter_by=filter_by, verbose=verbose,

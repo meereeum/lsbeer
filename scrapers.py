@@ -61,69 +61,114 @@ def get_reviews_ratebeer(query, beerpage=None):
 
     :query: query beername str
     """
-    BASE_URL = 'https://www.ratebeer.com/beer/{}/{}/'
+    BASE_URL_API = 'https://beta.ratebeer.com/v1/api/graphql/'
 
-    def get_beerpage(query):
-        """
-        :query: beername query str
-        :returns: (name, id)
-        """
-        BASE_URL_API = 'https://beta.ratebeer.com/v1/api/graphql/'
+    FIELDS = [
+        # 'id',
+        'name',
+        'averageRating',
+        'abv',
+        # 'overallScore',
+        'description',
+        # 'ratingCount'
+    ]
 
-        data = {
-            "query": "query beerSearch($query: String, $order: SearchOrder, $first: Int, $after: ID) { searchResultsArr: beerSearch(query: $query, order: $order, first: $first, after: $after) { totalCount last items { beer { id name overallScore ratingCount __typename } review { id score __typename } __typename   }   __typename } }",
-            "variables": {"query": query, "order": "MATCH", " first": 20},
-            "operationName":"beerSearch"
-        }
-        d_hits = (
-            requests
-            .post(BASE_URL_API,
-                data=json.dumps(data),
-                headers={"content-type": "application/json"})
-            .json()['data']['searchResultsArr']
-        )
 
-        if d_hits['totalCount'] == 0: # no match found
-            raise Exception
+    data = {
+        'query': 'query beerSearch($query: String, $order: SearchOrder, $first: Int, $after: ID) { searchResultsArr: beerSearch(query: $query, order: $order, first: $first, after: $after) { totalCount last items { beer { %s __typename } review { id score __typename } __typename   }   __typename } }' % (' '.join(FIELDS)),
+        'variables': {'query': query, 'order': 'MATCH', ' first': 20},
+        'operationName':'beerSearch'
+    }
+    d_hits = (
+        requests
+        .post(BASE_URL_API,
+            data=json.dumps(data),
+            headers={'content-type': 'application/json'})
+        .json()['data']['searchResultsArr']
+    )
 
-        top_hit = d_hits['items'][0]['beer']
-
-        # beername = top_hit['name']
-        # beer_id = top_hit['id']
-
-        return BASE_URL.format(safe_encode(
-            top_hit['name'], pattern='[^\w\n]+', space_char='-'),
-            top_hit['id'])
-
-    # get stats
-    try:
-        beerpage = beerpage if beerpage is not None else get_beerpage(query)
-    except(Exception): # not found
+    if d_hits['totalCount'] == 0: # no match found
         return {}
 
-    soup = soup_me(beerpage)
+    top_hit = d_hits['items'][0]['beer']
 
-    # mean rating = "?" / 5 #"?/5.0"
-    rating = re.sub('\/5\.?0?$', '', soup.find('a', attrs={'name': 'real average'}).strong.text)
+    # mean rating = "?.xx" / 5
+    rating = '{:.2f}'.format(top_hit['averageRating'])
 
     # abv = "?%"
-    abv = soup.find('abbr', title='Alcohol By Volume').next.next.next.strong.text
+    abv = '{}%'.format(top_hit['abv'])
 
     # style
-    style, = (tag.text for tag in soup('a', href=re.compile("^/beerstyles/"))
-              if tag.previous == 'Style: ')
+
+    # where
+
+    # description
+    description = top_hit['description']
+
+
+    # BASE_URL = 'https://www.ratebeer.com/beer/{}/{}/'
+
+    # def get_beerpage(query):
+    #     """
+    #     :query: beername query str
+    #     :returns: (name, id)
+    #     """
+    #     BASE_URL_API = 'https://beta.ratebeer.com/v1/api/graphql/'
+
+    #     data = {
+    #         "query": "query beerSearch($query: String, $order: SearchOrder, $first: Int, $after: ID) { searchResultsArr: beerSearch(query: $query, order: $order, first: $first, after: $after) { totalCount last items { beer { id name overallScore ratingCount __typename } review { id score __typename } __typename   }   __typename } }",
+    #         "variables": {"query": query, "order": "MATCH", " first": 20},
+    #         "operationName":"beerSearch"
+    #     }
+    #     d_hits = (
+    #         requests
+    #         .post(BASE_URL_API,
+    #             data=json.dumps(data),
+    #             headers={"content-type": "application/json"})
+    #         .json()['data']['searchResultsArr']
+    #     )
+
+    #     if d_hits['totalCount'] == 0: # no match found
+    #         raise Exception
+
+    #     top_hit = d_hits['items'][0]['beer']
+
+    #     # beername = top_hit['name']
+    #     # beer_id = top_hit['id']
+
+    #     return BASE_URL.format(safe_encode(
+    #         top_hit['name'], pattern='[^\w\n]+', space_char='-'),
+    #         top_hit['id'])
+
+    # # get stats
+    # try:
+    #     beerpage = beerpage if beerpage is not None else get_beerpage(query)
+    # except(Exception): # not found
+    #     return {}
+
+    # soup = soup_me(beerpage)
+
+    # # mean rating = "?" / 5 #"?/5.0"
+    # rating = re.sub('\/5\.?0?$', '', soup.find('a', attrs={'name': 'real average'}).strong.text)
+
+    # # abv = "?%"
+    # abv = soup.find('abbr', title='Alcohol By Volume').next.next.next.strong.text
+
+    # # style
+    # style, = (tag.text for tag in soup('a', href=re.compile("^/beerstyles/"))
+    #           if tag.previous == 'Style: ')
 
     # where
 
     beer_stats = {
         'rating': rating,
         'abv': abv,
-        'style': style#,
+        'description': description
+        # 'style': style#,
         # 'where': where,
     }
 
     return beer_stats
-    # return rating, beer_stats
 
 
 def get_reviews_untappd(query, beerpage=None):

@@ -4,7 +4,7 @@ import sys
 
 from tqdm import tqdm
 
-from CLIppy import fail_gracefully, flatten, get_from_file, safe_encode, soup_me
+from CLIppy import dedupe, fail_gracefully, flatten, get_from_file, safe_encode, soup_me
 
 from scrapers import get_bar, get_beers, get_reviews_ratebeer, get_reviews_untappd, get_reviews_beeradvocate, get_beerpages_en_masse
 
@@ -176,13 +176,15 @@ def word_intersection(*args):
     """
     strs / lists -> word intersection
     """
-    args = ((arg.split() if isinstance(arg, str) else arg) # str -> list
+    args = ((arg.lower().split() if isinstance(arg, str) # str -> list
+             else (a.lower() for a in arg)) # lst -> lowerlst
             for arg in args)
     return set.intersection(*(set(arg) for arg in args))
 
 
 def alternate_main(beerlst, fancy=False, sorted_=False, sort_by=None,
                    filter_by=[], verbose=False, with_key=False):
+    beerlst = dedupe(beerlst) # occasional conflict b/w taps vs growlers
     d_beers = populate_beer_dict(beerlst, verbose=verbose)
     print() # space after progress bar
 
@@ -192,7 +194,7 @@ def alternate_main(beerlst, fancy=False, sorted_=False, sort_by=None,
                                                               filter_by)]
                if filter_by else beerlst)
     if not beerlst:
-        print('overly filtered beers')
+        print('overly filtered beers\n')
         sys.exit(0)
 
     # sort
@@ -205,7 +207,7 @@ def alternate_main(beerlst, fancy=False, sorted_=False, sort_by=None,
     SEP = '|'
 
     kwargs = {'spacer': SPACER, 'sep': SEP}
-    if print_simple:
+    if not fancy:
         kwargs['maxwidth'] = MAXWIDTH
 
     pprint = print_fancy if fancy else print_simple
@@ -244,8 +246,6 @@ def get_parser():
     parser.add_argument('bar', nargs='*')
     parser.add_argument('-f', nargs='*', default=[],
                         help='path/to/beerfile')
-    parser.add_argument('--fancy', action='store_true',
-                        help='~*~print fancy~*~ (default: false)')
     parser.add_argument('--sorted', action='store_true',
                         help='sort by average rating? (default: false)')
     parser.add_argument('--sort-by', default=None,
@@ -253,10 +253,12 @@ def get_parser():
                         help='ratings website to sort by? (default: none)')
     parser.add_argument('--filter-by', nargs='*', default=[],
                         help='style/s to filter by? (default: all styles)')
+    parser.add_argument('-a', '--all', action='store_true',
+                        help='taps AND cans & bottles ? (default: taps only)')
     parser.add_argument('--just-cans', action='store_true',
                         help='cans & bottles only ? (default: taps only)')
-    parser.add_argument('--all', action='store_true',
-                        help='taps AND cans & bottles ? (default: taps only)')
+    parser.add_argument('--fancy', action='store_true',
+                        help='~*~print fancy~*~ (default: false)')
     parser.add_argument('--verbose', action='store_true',
                         help='verbose printing (e.g. for debugging)? (default: false)')
     # parser.add_argument('--filter-by', type=float, default=0,

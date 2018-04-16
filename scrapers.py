@@ -2,6 +2,7 @@
 import json
 import re
 import requests
+import sys
 from urllib.parse import unquote
 
 from CLIppy import safe_encode, soup_me
@@ -37,7 +38,8 @@ def get_beers(bar_url):
 
     beers = soup('a', href=re.compile('^/beers/'))
 
-    beer_names = [beer.text for beer in beers]
+    beer_names = [beer.text for beer in beers
+                  if beer.text != 'more'] # extra beer link
 
     # get_beer_info = lambda tag: tag.next.next.next.next.text.replace(
     #     '\n','').split('·')
@@ -221,7 +223,6 @@ def get_reviews_untappd(query, beerpage=None):
         'description': description
     }
 
-    # return rating, beer_stats
     return beer_stats
 
 

@@ -56,7 +56,8 @@ def sort_beerlst(beerlst, d_beers, sorted_=False, sort_by=None):
 
     def get_avg_rating(beer):
         ratings = [float(d_stats['rating']) for d_stats in d_beers[beer].values()
-                   if d_stats] # skip empty / not found
+                   if d_stats and d_stats.__contains__('rating')] # skip empty / not found
+                   # if d_stats and d_stats['rating']] # skip empty / not found
         try:
             avg = sum(ratings) / len(ratings)
         except(ZeroDivisionError):
@@ -67,6 +68,8 @@ def sort_beerlst(beerlst, d_beers, sorted_=False, sort_by=None):
     def get_rating_by_site(beer, site):
         try:
             rating = d_beers[beer][site]['rating']
+            # assert rating
+        # except(KeyError, AssertionError):
         except(KeyError):
             rating = -1 # no review found - list last
 

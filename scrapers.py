@@ -215,7 +215,7 @@ def get_reviews_beeradvocate(query, beerpage=None):
 
     # mean rating = "?" / 5 #"?/5.0"
     rating = soup.find('span', class_='ba-ravg').text
-    rating = '' if rating == '0' else rating # i.e. not rated
+    # rating = '' if rating == '0' else rating # i.e. not rated
 
     # abv = "?%"
     abv = soup.find('b', text='Alcohol by volume (ABV):').next.next.strip()
@@ -228,11 +228,13 @@ def get_reviews_beeradvocate(query, beerpage=None):
         '^/place/directory/.')))
 
     beer_stats = {
-        'rating': rating,
+        # 'rating': rating,
         'abv': abv,
         'style': style,
         'where': where
     }
+    if rating != '0': # not rated
+        beer_stats['rating'] = rating
 
     return beer_stats
 

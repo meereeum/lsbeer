@@ -78,50 +78,6 @@ def get_beers(bar_url):
     for beername, servinginfo in zip(beer_names, beer_servinginfos):
         d_stats[beername]['serving'].append(to_dict(KEYS_SERVINGINFO, servinginfo))
 
-    # d_stats = {
-    #     beername: to_dict(KEYS_INFO, beerinfo)
-    #     for beername, beerinfo in zip(beer_names, beer_infos)
-    # }
-    # d_stats = {
-    #     beername: to_dict(
-    #         chain(keys_info, ('serving',)),
-    #         chain(beerinfo, (to_dict(
-    #             keys_servinginfo, beerservinginfo),)))
-    #     for beername, beerinfo, beerservinginfo in zip(
-    #             beer_names, beer_infos, beer_servinginfos)
-    # }
-
-    # d_stats = {
-    #     beername: to_dict(('style, abv', 'where', 'serving'),
-    #                       chain(beerinfo, (to_dict('volume', 'type', 'price'))))
-    #     for beername, beerinfo, beerservinginfo in zip(
-    #             beer_names, beer_infos, beer_servinginfos)
-    # }
-
-    # d_stats = {
-    #     beername: {k: v for k, v in zip(('style', 'abv', 'where', 'serving'),
-    #                                     chain.from_iterable(beerinfo) if v}
-    #     for beername, beerinfo, beerservinginfo in zip(
-    #             beer_names, beer_infos, beer_servinginfos)
-    # }
-
-    # d_stats = {
-    #     beername: {k: v for k, v in zip(('style', 'abv', 'where'),
-    #                                     beerinfo) if v}
-    #     for beername, beerinfo in zip(beer_names, beer_infos)
-    # }
-
-    # for beer, beerservinginfo in zip(beer_names, beer_servinginfos):
-    #     d_stats[beer]['serving'] = dict(
-    #         (k,v) for k, v in zip(('volume', 'type', 'price'),
-    #                               beerservinginfo) if v)
-
-    # n_on_tap = int(re.sub('.*On Tap: *(\d*).*', '\\1', soup.find(
-    #     'div', class_='pure-u-1-2 text-right').text.strip()))
-
-    # TODO
-    # return beer_names
-    # return beer_names, n_on_tap
     return d_stats
 
 
@@ -234,7 +190,7 @@ def get_reviews_ratebeer(query, beerpage=None):
         'rating': rating,
         'abv': abv,
         'description': description
-        # 'style': style#,
+        # 'style': style,
         # 'where': where,
     }
 
@@ -342,7 +298,6 @@ def get_reviews_beeradvocate(query, beerpage=None):
         '^/place/directory/.')))
 
     beer_stats = {
-        # 'rating': rating,
         'abv': abv,
         'style': style,
         'where': where

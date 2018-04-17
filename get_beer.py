@@ -5,7 +5,7 @@ import sys
 import more_itertools
 from tqdm import tqdm
 
-from CLIppy import dedupe, fail_gracefully, flatten, get_from_file, safe_encode, soup_me
+from CLIppy import fail_gracefully, flatten, get_from_file, safe_encode, soup_me
 
 from scrapers import get_bar, get_beers, get_reviews_ratebeer, get_reviews_untappd, get_reviews_beeradvocate, get_beerpages_en_masse
 
@@ -84,13 +84,6 @@ def sort_beerlst(beerlst, d_beers, sorted_=False, sort_by=None):
     KEY = (get_avg_rating if sorted_ else                              # avg review
            lambda x: (get_rating_by_site(x, sort_by), get_avg_rating)) # by site, then avg
 
-    # beerlst = (sorted(beerlst, key=KEY, reverse=True) # best -> worst
-    #            if (sorted_ or sort_by) else beerlst)
-    # beerlst = (sorted(beerlst, key=get_avg_rating, reverse=True) # best -> worst
-    #            if sorted_ else beerlst)
-    #
-    # return beerlst
-
     return sorted(beerlst, key=KEY, reverse=True) # best -> worst
 
 
@@ -163,7 +156,7 @@ def outer_main(barquery=None, beerfile=None, fancy=False, sorted_=False,
         # beerlst, n_on_tap = get_beers(bar_url)
         # d_beers_beermenus, n_on_tap = get_beers(bar_url)
         # beerlst = list(d_beers.keys())
-        d_beers_beermenus = get_beers(bar_url)
+        d_beermenus = get_beers(bar_url)
         # beerlst = list(d_beers.keys())
 
         isnt_on_tap = lambda beer: (
@@ -175,12 +168,12 @@ def outer_main(barquery=None, beerfile=None, fancy=False, sorted_=False,
         barname = beerfile.split('_')[-1]
         beerlst = get_beers_from_file(beerfile)
         # on_draft = get_beers_from_file(beerfile)
-        d_beers_beermenus = {}#; n_on_tap = len(beerlst)
+        d_beermenus = {}#; n_on_tap = len(beerlst)
 
     print('\n what\'s on @ {} ?? \n'.format(barname.upper()))
 
     kwargs = {
-        'd_beers_beermenus': d_beers_beermenus,
+        'd_beermenus': d_beermenus,
         'fancy': fancy,
         'sorted_': sorted_,
         'sort_by': sort_by,
@@ -190,7 +183,7 @@ def outer_main(barquery=None, beerfile=None, fancy=False, sorted_=False,
 
     if beerfile or (barquery and get_taps):
         # beerlst_taps = beerlst[:n_on_tap]
-        beerlst_taps = beerlst #on_draft
+        beerlst_taps = beerlst
         alternate_main(beerlst_taps, with_key=(not get_cans), **kwargs)
         # alternate_main(beerlst_taps, d_beers_extra=d_beers_beermenus,
         #                fancy=fancy, sorted_=sorted_, sort_by=sort_by,
@@ -218,8 +211,7 @@ def word_intersection(*args):
 
 
 def alternate_main(beerlst, fancy=False, sorted_=False, sort_by=None,
-                   filter_by=[], d_beers_beermenus={}, verbose=False, with_key=False):
-    beerlst = dedupe(beerlst) # occasional conflict b/w taps vs growlers
+                   filter_by=[], d_beermenus={}, verbose=False, with_key=False):
     d_beers = populate_beer_dict(beerlst, verbose=verbose)
     d_beers.update(((beer, {'beermenus': d_beers_beermenus.get(beer,{})})
                    for beer in beerlst))

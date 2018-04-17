@@ -104,8 +104,10 @@ def print_fancy(beer, d_stats, sep='|', spacer='  '):
     # reviews
     sitetxt = ''.join(
         ('{spacer}',
-         '{spacer}{sep}{spacer}'.join(['({})'] * len(d_stats)),
-         '{spacer}')).format(*d_stats.keys(), spacer=spacer, sep=sep)
+         # '{spacer}{sep}{spacer}'.join(['({})'] * len(d_stats)),
+         '{spacer}{sep}{spacer}'.join(['({})'] * len(D_ACTIONS)),
+         # '{spacer}')).format(*d_stats.keys(), spacer=spacer, sep=sep)
+         '{spacer}')).format(*D_ACTIONS.keys(), spacer=spacer, sep=sep)
     # sitetxt = ''.join(
     #     ('{spacer}',
     #      '{spacer}{sep}{spacer}'.join(['({})'] * len(d_reviews)),
@@ -114,8 +116,12 @@ def print_fancy(beer, d_stats, sep='|', spacer='  '):
 
     widths = (len(_) for _ in sitetxt.split(sep))
 
-    reviewtxt = '{sep}'.join(['{:^{}}'] * len(d_stats)).format(
-        *flatten(zip((stats.get('rating', '') for stats in d_stats.values()),
+    # reviewtxt = '{sep}'.join(['{:^{}}'] * len(d_stats)).format(
+    #     *flatten(zip((stats.get('rating', '') for stats in d_stats.values()),
+    #                  widths)), sep=sep)
+    reviewtxt = '{sep}'.join(['{:^{}}'] * len(D_ACTIONS)).format(
+        *flatten(zip((stats.get('rating', '') for site, stats in d_stats.items()
+                      if site in D_ACTIONS.keys()), # ratings sites only
                      widths)), sep=sep)
     # reviewtxt = '{sep}'.join(['{:^{}}'] * len(d_reviews)).format(
     #     *flatten(zip(d_reviews.values(), widths)), sep=SEP)
@@ -159,10 +165,24 @@ def outer_main(barquery=None, beerfile=None, fancy=False, sorted_=False,
         d_beermenus = get_beers(bar_url)
         # beerlst = list(d_beers.keys())
 
-        isnt_on_tap = lambda beer: (
-            'draft' not in set(d['type'] for d in d_stats[beer]['serving']))
+        # isnt_on_tap = lambda beer: (
+        #     'draft' not in set(d['type'] for d in d_stats[beer]['serving']))
+
+        # get_servingtypes = lambda beer: set(
+        #     d['type'] for d in d_stats[beer]['serving'])
+
+        def is_served_as(beer, *args):
+            servingtypes = set(d['type'] for d in d_beermenus[beer]['serving'])
+            return any(arg in servingtypes for arg in args)
+
+        is_on_tap = lambda beer: is_served_as(beer, 'draft', 'cask')
+        is_bottled = lambda beer: is_served_as(beer, 'bottle', 'can')
+
         # on_draft, not_on_draft = more_itertools.partition(isnt_on_tap, d_stats.keys())
-        beerlst, rest = more_itertools.partition(isnt_on_tap, d_stats.keys())
+        # beerlst, rest = more_itertools.partition(isnt_on_tap, d_stats.keys())
+
+        beerlst = [beer for beer in d_beermenus.keys() if is_on_tap(beer)]
+        beerlst_rest = [beer for beer in d_beermenus.keys() if is_bottled(beer)]
 
     else:
         barname = beerfile.split('_')[-1]
@@ -177,7 +197,7 @@ def outer_main(barquery=None, beerfile=None, fancy=False, sorted_=False,
         'fancy': fancy,
         'sorted_': sorted_,
         'sort_by': sort_by,
-        'filter_by': filter_by
+        'filter_by': filter_by,
         'verbose': verbose
     }
 
@@ -193,7 +213,7 @@ def outer_main(barquery=None, beerfile=None, fancy=False, sorted_=False,
     if barquery and get_cans:
         print('CANS & BOTTLES...')
         # beerlst_cans = beerlst[n_on_tap:]
-        beerlst_cans = rest #not_on_draft
+        beerlst_cans = beerlst_rest
         alternate_main(beerlst_cans, with_key=get_cans, **kwargs)
         # alternate_main(beerlst_cans, d_beers_extra=d_beers_beermenus, fancy=fancy, sorted_=sorted_,
         #                sort_by=sort_by, filter_by=filter_by, verbose=verbose,
@@ -213,9 +233,11 @@ def word_intersection(*args):
 def alternate_main(beerlst, fancy=False, sorted_=False, sort_by=None,
                    filter_by=[], d_beermenus={}, verbose=False, with_key=False):
     d_beers = populate_beer_dict(beerlst, verbose=verbose)
-    d_beers.update(((beer, {'beermenus': d_beers_beermenus.get(beer,{})})
-                   for beer in beerlst))
     print() # space after progress bar
+
+    # augment with beermenus data
+    for beer in beerlst:
+        d_beers[beer]['beermenus'] = d_beermenus.get(beer, {})
 
     # filter
     get_style = lambda x: d_beers[x]['untappd']['style']

@@ -95,10 +95,13 @@ def print_fancy(beer, d_stats, sep='|', spacer='  '):
     # d_reviews = {k: v['rating'] for k,v in d_stats.items()
     #              if v} # skip empty / not found
 
+    style = get_info_ranked('style')
+    abv = get_info_ranked('abv')
+
     # header
     print('\n{pattern} {} {pattern} ({}, {})\n'.format(beer,
-                                                       d_stats['untappd']['style'],
-                                                       d_stats['untappd']['abv'],
+                                                       style, #d_stats['untappd']['style'],
+                                                       abv, #d_stats['untappd']['abv'],
                                                        pattern=PATTERN))
 
     # reviews
@@ -132,6 +135,22 @@ def print_fancy(beer, d_stats, sep='|', spacer='  '):
     print()
 
 
+def get_info_ranked(d_stats, k_info, l_ranked_ks=['untappd', 'beermenus',
+                                                  'ratebeer', 'beeradvocate']):
+    """
+    dict of beer stats, key for info, list of ranked keys -> info under highest ranked key available
+       i.e. d_stats[highest_ranked_k_in_l][k_info]
+    """
+    if not l_ranked_ks: # base case: info not found in any of ranked keys
+        return ''
+
+    top_k, *rest = l_ranked_ks
+    try:
+        return d_stats[top_k][k_info]
+    except(KeyError):
+        return get_info_ranked(d_stats, k_info, rest)
+
+
 def print_simple(beer, d_stats, maxwidth, sep='|', spacer='  '):
     # SPACER = '  '
     # SEP = '|'
@@ -139,15 +158,47 @@ def print_simple(beer, d_stats, maxwidth, sep='|', spacer='  '):
     # reviewtxt = '{sep}'.join(['{:^6}'] * len(d_stats)).format(
     #     *(stats.get('rating', '') for stats in d_stats.values()),
     #     sep=sep)
-    reviewtxt = '{sep}'.join(['{:^6}'] * len(d_stats)).format(
+    # reviewtxt = '{sep}'.join(['{:^6}'] * len(d_stats)).format(
+    reviewtxt = '{sep}'.join(['{:^6}'] * len(D_ACTIONS)).format(
         *(stats.get('rating', '') for site, stats in d_stats.items()
-          if site in D_ACTIONS.keys()), # rating stes only
+          if site in D_ACTIONS.keys()), # rating sites only
         sep=sep)
+
+    # get_info_ranked = lambda l_ks: d_stats.get(
+    #     l_ks[0], get_info_ranked(l_ks[1:]))
+
+    # def get_info_ranked(k_info, l_ranked_ks):
+    #     """
+    #     list of ranked keys, key for info -> info under highest ranked key available
+    #     """
+    #     if not l_ranked_ks: # base case: info not found in any of ranked keys
+    #         info = ''
+
+    #     top_k, *rest = l_ranked_ks
+    #     try:
+    #         # info = d_stats[l_ranked_ks[0]][k_info]
+    #         info = d_stats[top_k][k_info]
+    #     except(KeyError):
+    #         # info = get_info_ranked(k_info, l_ranked_ks[1:])
+    #         info = get_info_ranked(k_info, rest)
+    #     return info
+
+    # style = d_stats.get('untappd', # 1st choice + backup
+    #                     d_stats.get('beermenus'))['style'].lower()
+
+    # abv = d_stats.get('untappd', # 1st choice + backup
+    #                   d_stats.get('beermenus'))['abv']
+    # SITES_RANKED = ['untappd', 'beermenus', 'ratebeer', 'beeradvocate']
+
+    # style = get_info_ranked('style', SITES_RANKED).lower()
+    # abv = get_info_ranked('abv', SITES_RANKED)
+    style = get_info_ranked(d_stats, 'style').lower()
+    abv = get_info_ranked(d_stats, 'abv')
 
     print('[{}]{spacer}{:<{width}}{spacer}({}, {})'.format(reviewtxt,
                                                            beer,
-                                                           d_stats['untappd']['style'].lower(),
-                                                           d_stats['untappd']['abv'],
+                                                           style,# d_stats['untappd']['style'].lower(),
+                                                           abv,# d_stats['untappd']['abv'],
                                                            width=maxwidth,
                                                            spacer=spacer))
 

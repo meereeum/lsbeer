@@ -122,7 +122,7 @@ def get_reviews_ratebeer(query, beerpage=None):
     rating = '{:.2f}'.format(top_hit['averageRating'])
 
     # abv = "?%"
-    abv = '{}%'.format(top_hit['abv'])
+    abv = '{:.2f}%'.format(top_hit['abv'])
 
     # style
 
@@ -240,12 +240,13 @@ def get_reviews_untappd(query, beerpage=None):
         'div', class_="beer-descrption-read-less").text.strip())
 
     beer_stats = {
-        'rating': rating,
         'abv': abv,
         'style': style,
         # 'where': where,
         'description': description
     }
+    if rating != 'N/A': # not rated
+        beer_stats['rating'] = rating
 
     return beer_stats
 
@@ -282,6 +283,11 @@ def get_reviews_beeradvocate(query, beerpage=None):
         return {}
 
     soup = soup_me(beerpage)
+
+    try:
+        assert soup.find('div', id='info_box').find('b').text == 'BEER INFO'
+    except(AssertionError): # e.g. google found place page
+        return get_reviews_beeradvocate(query) if beerpage else {}
 
     # mean rating = "?" / 5 #"?/5.0"
     rating = soup.find('span', class_='ba-ravg').text

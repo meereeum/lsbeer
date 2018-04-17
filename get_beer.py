@@ -322,7 +322,8 @@ def alternate_main(beerlst, fancy=False, sorted_=False, sort_by=None,
 
         d_stats = d_beers[beer]
 
-        if not d_stats: # no reviews found
+        # shld only happen with non-beermenus beer (i.e. from file)
+        if not any(v for v in d_stats.values()): # no data found
             print('\nskipping {}...\n'.format(beer))
             continue
 

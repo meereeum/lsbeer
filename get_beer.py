@@ -2,7 +2,6 @@ import argparse
 from collections import defaultdict
 import sys
 
-import more_itertools
 from tqdm import tqdm
 
 from CLIppy import fail_gracefully, flatten, get_from_file, safe_encode, soup_me
@@ -159,39 +158,12 @@ def print_simple(beer, d_stats, maxwidth, sep='|', spacer='  '):
     #     *(stats.get('rating', '') for stats in d_stats.values()),
     #     sep=sep)
     # reviewtxt = '{sep}'.join(['{:^6}'] * len(d_stats)).format(
+
     reviewtxt = '{sep}'.join(['{:^6}'] * len(D_ACTIONS)).format(
         *(stats.get('rating', '') for site, stats in d_stats.items()
           if site in D_ACTIONS.keys()), # rating sites only
         sep=sep)
 
-    # get_info_ranked = lambda l_ks: d_stats.get(
-    #     l_ks[0], get_info_ranked(l_ks[1:]))
-
-    # def get_info_ranked(k_info, l_ranked_ks):
-    #     """
-    #     list of ranked keys, key for info -> info under highest ranked key available
-    #     """
-    #     if not l_ranked_ks: # base case: info not found in any of ranked keys
-    #         info = ''
-
-    #     top_k, *rest = l_ranked_ks
-    #     try:
-    #         # info = d_stats[l_ranked_ks[0]][k_info]
-    #         info = d_stats[top_k][k_info]
-    #     except(KeyError):
-    #         # info = get_info_ranked(k_info, l_ranked_ks[1:])
-    #         info = get_info_ranked(k_info, rest)
-    #     return info
-
-    # style = d_stats.get('untappd', # 1st choice + backup
-    #                     d_stats.get('beermenus'))['style'].lower()
-
-    # abv = d_stats.get('untappd', # 1st choice + backup
-    #                   d_stats.get('beermenus'))['abv']
-    # SITES_RANKED = ['untappd', 'beermenus', 'ratebeer', 'beeradvocate']
-
-    # style = get_info_ranked('style', SITES_RANKED).lower()
-    # abv = get_info_ranked('abv', SITES_RANKED)
     style = get_info_ranked(d_stats, 'style').lower()
     abv = get_info_ranked(d_stats, 'abv')
 
@@ -204,23 +176,15 @@ def print_simple(beer, d_stats, maxwidth, sep='|', spacer='  '):
 
 
 @fail_gracefully
-def outer_main(barquery=None, beerfile=None, fancy=False, sorted_=False,
-               sort_by=None, filter_by=[], get_taps=True, get_cans=False,
-               verbose=False):
+def outer_main(barquery=None, beerfile=None, get_taps=True, get_cans=False,
+               interactive=False, **kwargs):
 
     if barquery:
         barname, bar_url = get_bar(barquery)
         # beerlst, n_on_tap = get_beers(bar_url)
         # d_beers_beermenus, n_on_tap = get_beers(bar_url)
-        # beerlst = list(d_beers.keys())
         d_beermenus = get_beers(bar_url)
-        # beerlst = list(d_beers.keys())
-
-        # isnt_on_tap = lambda beer: (
-        #     'draft' not in set(d['type'] for d in d_stats[beer]['serving']))
-
-        # get_servingtypes = lambda beer: set(
-        #     d['type'] for d in d_stats[beer]['serving'])
+        kwargs['d_beermenus'] = d_beermenus
 
         def is_served_as(beer, *args):
             servingtypes = set(d['type'] for d in d_beermenus[beer]['serving'])
@@ -228,9 +192,6 @@ def outer_main(barquery=None, beerfile=None, fancy=False, sorted_=False,
 
         is_on_tap = lambda beer: is_served_as(beer, 'draft', 'cask')
         is_bottled = lambda beer: is_served_as(beer, 'bottle', 'can')
-
-        # on_draft, not_on_draft = more_itertools.partition(isnt_on_tap, d_stats.keys())
-        # beerlst, rest = more_itertools.partition(isnt_on_tap, d_stats.keys())
 
         beerlst = [beer for beer in d_beermenus.keys() if is_on_tap(beer)]
         beerlst_rest = [beer for beer in d_beermenus.keys() if is_bottled(beer)]
@@ -243,32 +204,16 @@ def outer_main(barquery=None, beerfile=None, fancy=False, sorted_=False,
 
     print('\n what\'s on @ {} ?? \n'.format(barname.upper()))
 
-    kwargs = {
-        'd_beermenus': d_beermenus,
-        'fancy': fancy,
-        'sorted_': sorted_,
-        'sort_by': sort_by,
-        'filter_by': filter_by,
-        'verbose': verbose
-    }
-
     if beerfile or (barquery and get_taps):
         # beerlst_taps = beerlst[:n_on_tap]
         beerlst_taps = beerlst
         alternate_main(beerlst_taps, with_key=(not get_cans), **kwargs)
-        # alternate_main(beerlst_taps, d_beers_extra=d_beers_beermenus,
-        #                fancy=fancy, sorted_=sorted_, sort_by=sort_by,
-        #                filter_by=filter_by, verbose=verbose,
-        #                with_key=(not get_cans))
 
     if barquery and get_cans:
-        print('CANS & BOTTLES...')
+        print('\nCANS & BOTTLES...\n')
         # beerlst_cans = beerlst[n_on_tap:]
         beerlst_cans = beerlst_rest
         alternate_main(beerlst_cans, with_key=get_cans, **kwargs)
-        # alternate_main(beerlst_cans, d_beers_extra=d_beers_beermenus, fancy=fancy, sorted_=sorted_,
-        #                sort_by=sort_by, filter_by=filter_by, verbose=verbose,
-        #                with_key=get_taps)
 
 
 def word_intersection(*args):
@@ -352,8 +297,7 @@ def get_parser():
     parser.add_argument('--sorted', action='store_true',
                         help='sort by average rating? (default: false)')
     parser.add_argument('--sort-by', default=None,
-                        choices=D_ACTIONS.keys(),
-                        # choices=['untappd', 'ratebeer', 'beeradvocate'],
+                        choices=D_ACTIONS.keys(), # ['untappd', 'ratebeer', 'beeradvocate'],
                         help='ratings website to sort by? (default: none)')
     parser.add_argument('--filter-by', nargs='*', default=[],
                         help='style/s to filter by? (default: all styles)')

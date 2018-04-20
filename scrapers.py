@@ -187,12 +187,13 @@ def get_reviews_ratebeer(query, beerpage=None):
     # where
 
     beer_stats = {
-        'rating': rating,
         'abv': abv,
         'description': description
         # 'style': style,
         # 'where': where,
     }
+    if rating != '0.00': # not rated
+        beer_stats['rating'] = rating
 
     return beer_stats
 
@@ -240,13 +241,15 @@ def get_reviews_untappd(query, beerpage=None):
         'div', class_="beer-descrption-read-less").text.strip())
 
     beer_stats = {
-        'abv': abv,
+        # 'abv': abv,
         'style': style,
         # 'where': where,
         'description': description
     }
     if rating != 'N/A': # not rated
         beer_stats['rating'] = rating
+    if abv != 'No': # no abv
+        beer_stats['abv'] = abv
 
     return beer_stats
 

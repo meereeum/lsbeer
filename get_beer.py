@@ -15,38 +15,45 @@ D_ACTIONS = {
 }
 
 
-def populate_beer_dict(beerlst, verbose=False):
+def get_d_stats(beer, verbose=False):
+# fn must be outer to be pickleable, and therefore eligible for multiprocessing
+
+    if verbose:
+        print('looking up {} drinkability...'.format(beer.upper()))
+
+    # dictionary of stats dictionaries
+    d_stats = {
+        site: action(beer, beerpage=get_beerpages_en_masse(beer).get(
+            site, None)) # fallback is beerpage-specific search
+        for site, action in D_ACTIONS.items()
+    }
+
+    if verbose:
+        print('& done.')
+
+    return d_stats
+
+
+def populate_beer_dict(beerlst, nthreads=4, verbose=False):
     """
     lst of beers -> beerdict of sitesdicts of statsdicts
     """
 
-    # D_ACTIONS = {
-    #     'untappd': get_reviews_untappd,
-    #     'ratebeer': get_reviews_ratebeer,
-    #     'beeradvocate': get_reviews_beeradvocate
-    # }
+    if nthreads > 1:
+        from multiprocessing import Pool
 
-    def get_d_stats(beer):
+        # TODO verbose not passed
+        # via https://stackoverflow.com/questions/41920124/multiprocessing-use-tqdm-to-display-a-progress-bar
+        with Pool(nthreads) as p:
+            d_beers = dict(zip(beerlst, list( # list needed to finalize itable for tqdm
+                tqdm(p.imap(get_d_stats, beerlst), # <- progress bar
+                     total=len(beerlst)))))
 
-        if verbose:
-            print('looking up {} drinkability...'.format(beer.upper()))
+    else:
+        d_beers = {beer: get_d_stats(beer, verbose=verbose)
+                   for beer in tqdm(beerlst)} # <- progress bar
 
-        # dictionary of stats dictionaries
-        d_stats = {
-            site: action(beer, beerpage=get_beerpages_en_masse(beer).get(
-                site, None)) # fallback is beerpage-specific search
-            for site, action in D_ACTIONS.items()
-        }
-
-        if verbose:
-            print('& done.')
-
-        return d_stats
-
-    # dict of sitedicts of statsdicts
-    d_beers = {beer: get_d_stats(beer) for beer in tqdm(beerlst)} # <- progress bar
-
-    return d_beers
+    return d_beers # dict of sitedicts of statsdicts
 
 
 def get_beers_from_file(f):
@@ -230,9 +237,11 @@ def word_intersection(*args):
     return set.intersection(*(set(arg) for arg in args))
 
 
-def alternate_main(beerlst, fancy=False, sorted_=False, sort_by=None,
-                   filter_by=[], d_beermenus={}, verbose=False, with_key=False):
-    d_beers = populate_beer_dict(beerlst, verbose=verbose)
+def alternate_main(beerlst, d_beermenus={}, fancy=False, sorted_=False,
+                   sort_by=None, filter_by=[], nthreads=1, verbose=False,
+                   with_key=False):
+
+    d_beers = populate_beer_dict(beerlst, nthreads=nthreads, verbose=verbose)
     print() # space after progress bar
 
     # augment with beermenus data
@@ -311,6 +320,8 @@ def get_parser():
                         help='cans & bottles only ? (default: taps only)')
     parser.add_argument('--fancy', action='store_true',
                         help='~*~print fancy~*~ (default: false)')
+    parser.add_argument('-t', '--nthreads', type=int, default=4,
+                        help='number of threads (default: 4)')
     parser.add_argument('--verbose', action='store_true',
                         help='verbose printing (e.g. for debugging)? (default: false)')
     # parser.add_argument('--filter-by', type=float, default=0,
@@ -334,6 +345,7 @@ if __name__ == '__main__':
                sorted_=args.sorted,
                sort_by=args.sort_by,
                filter_by=args.filter_by,
+               nthreads=args.nthreads,
                verbose=args.verbose,
                get_taps=(not args.just_cans),
                get_cans=(args.all or args.just_cans))

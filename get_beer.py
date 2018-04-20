@@ -196,6 +196,10 @@ def outer_main(barquery=None, beerfile=None, get_taps=True, get_cans=False,
         beerlst = [beer for beer in d_beermenus.keys() if is_on_tap(beer)]
         beerlst_rest = [beer for beer in d_beermenus.keys() if is_bottled(beer)]
 
+        if barname.lower() == 'covenhoven': # TODO drafts listed as bottle - eventually fix for good
+            beerlst = list(d_beermenus.keys())
+            beerlst_rest = []
+
     else:
         barname = beerfile.split('_')[-1]
         beerlst = get_beers_from_file(beerfile)

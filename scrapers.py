@@ -234,7 +234,11 @@ def get_reviews_untappd(query, beerpage=None):
     soup = soup_me(beerpage)
 
     # mean rating = "?" / 5 #"?/5.0"
-    rating = re.sub('[\(\)]', '',soup.find('span', class_='num').text)
+    try:
+        rating = re.sub('[\(\)]', '',soup.find('span', class_='num').text)
+    except(AttributeError): # no match
+        assert soup.find('p', class_='info'), "oops - your IP's been blocked. skipping..."
+        return {}
 
     # abv = "?%"
     abv = re.sub(' ABV$', '', soup.find('p', class_='abv').text.strip())

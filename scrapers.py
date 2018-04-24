@@ -99,6 +99,8 @@ def get_reviews_ratebeer(query, beerpage=None):
         # 'ratingCount'
     ]
 
+    UNRATED = '0.00'
+
 
     data = {
         'query': 'query beerSearch($query: String, $order: SearchOrder, $first: Int, $after: ID) { searchResultsArr: beerSearch(query: $query, order: $order, first: $first, after: $after) { totalCount last items { beer { %s __typename } review { id score __typename } __typename   }   __typename } }' % (' '.join(FIELDS)),
@@ -119,7 +121,10 @@ def get_reviews_ratebeer(query, beerpage=None):
     top_hit = d_hits['items'][0]['beer']
 
     # mean rating = "?.xx" / 5
-    rating = '{:.2f}'.format(top_hit['averageRating'])
+    try:
+        rating = '{:.2f}'.format(top_hit['averageRating'])
+    except(TypeError): # None
+        rating = UNRATED
 
     # abv = "?%"
     abv = '{:.2f}%'.format(top_hit['abv'])
@@ -192,7 +197,7 @@ def get_reviews_ratebeer(query, beerpage=None):
         # 'style': style,
         # 'where': where,
     }
-    if rating != '0.00': # not rated
+    if rating != UNRATED:
         beer_stats['rating'] = rating
 
     return beer_stats
@@ -204,6 +209,9 @@ def get_reviews_untappd(query, beerpage=None):
     :query: query beername str
     """
     BASE_URL = 'https://untappd.com/{}'
+
+    UNRATED = 'N/A'
+    UNABVED = 'No'
 
     def get_beerpage(query):
         """
@@ -246,9 +254,9 @@ def get_reviews_untappd(query, beerpage=None):
         # 'where': where,
         'description': description
     }
-    if rating != 'N/A': # not rated
+    if rating != UNRATED:
         beer_stats['rating'] = rating
-    if abv != 'No': # no abv
+    if abv != UNABVED:
         beer_stats['abv'] = abv
 
     return beer_stats
@@ -260,6 +268,8 @@ def get_reviews_beeradvocate(query, beerpage=None):
     :query: query beername str
     """
     BASE_URL = 'https://www.beeradvocate.com/{}'
+
+    UNRATED = '0'
 
     def get_beerpage(query):
         """
@@ -311,7 +321,7 @@ def get_reviews_beeradvocate(query, beerpage=None):
         'style': style,
         'where': where
     }
-    if rating != '0': # not rated
+    if rating != UNRATED:
         beer_stats['rating'] = rating
 
     return beer_stats

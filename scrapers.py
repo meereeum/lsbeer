@@ -34,7 +34,7 @@ def get_beers(bar_url):
     """
     bar_url -> list of beernames, num on tap (listed 1st)
     """
-    soup = soup_me(bar_url)
+    soup = soup_me(bar_url, from_headless=True)
 
     beers = soup('a', href=re.compile('^/beers/'))
 
@@ -249,8 +249,11 @@ def get_reviews_untappd(query, beerpage=None):
     # where
 
     # long desc
-    description = re.sub(re.compile(' ?Show Less$'), '', soup.find(
-        'div', class_="beer-descrption-read-less").text.strip())
+    try:
+        description = re.sub(re.compile(' ?Show Less$'), '', soup.find(
+            'div', class_="beer-descrption-read-less").text.strip())
+    except(AttributeError): # no match
+        description = ''
 
     beer_stats = {
         # 'abv': abv,

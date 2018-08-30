@@ -197,7 +197,7 @@ def outer_main(barquery=None, beerfile=None, get_taps=True, get_cans=False,
             servingtypes = set(d['type'] for d in d_beermenus[beer]['serving'])
             return any(arg in servingtypes for arg in args)
 
-        is_on_tap = lambda beer: is_served_as(beer, 'draft', 'cask')
+        is_on_tap = lambda beer: is_served_as(beer, 'draft', 'cask', 'crowler', 'growler')
         is_bottled = lambda beer: is_served_as(beer, 'bottle', 'can')
 
         beerlst = [beer for beer in d_beermenus.keys() if is_on_tap(beer)]

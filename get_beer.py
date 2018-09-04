@@ -157,6 +157,17 @@ def get_info_ranked(d_stats, k_info, l_ranked_ks=['untappd', 'beermenus',
         return get_info_ranked(d_stats, k_info, rest)
 
 
+def get_info_consensus(d_stats, k_info):
+    """
+    dict of beer stats, key for info -> consensus info under key across sites
+    """
+    # try: TODO currently, must be common to all
+    #     word_intersection(*(d[k_info] for d in d_stats.values()
+    #                         if d.__contains__('k_info')))
+    # TODO
+    pass
+
+
 def print_simple(beer, d_stats, maxwidth, sep='|', spacer='  '):
     # SPACER = '  '
     # SEP = '|'
@@ -218,13 +229,20 @@ def outer_main(barquery=None, beerfile=None, get_taps=True, get_cans=False,
     if beerfile or (barquery and get_taps):
         # beerlst_taps = beerlst[:n_on_tap]
         beerlst_taps = beerlst
-        alternate_main(beerlst_taps, with_key=(not get_cans), **kwargs)
+        d_beers1 = alternate_main(beerlst_taps, with_key=(not get_cans), **kwargs)
 
     if barquery and get_cans:
         print('\nCANS & BOTTLES...\n')
         # beerlst_cans = beerlst[n_on_tap:]
         beerlst_cans = beerlst_rest
-        alternate_main(beerlst_cans, with_key=get_cans, **kwargs)
+        d_beers2 = alternate_main(beerlst_cans, with_key=get_cans, **kwargs)
+
+    if interactive:
+        from itertools import chain
+        for k, v in chain(d_beers1.items(), d_beers2.items()):
+            d_beers = d_beermenus[k].update(**v)
+
+        import IPython; IPython.embed()
 
 
 def word_intersection(*args):
@@ -249,7 +267,10 @@ def alternate_main(beerlst, d_beermenus={}, fancy=False, sorted_=False,
         d_beers[beer]['beermenus'] = d_beermenus.get(beer, {})
 
     # filter
-    get_style = lambda x: d_beers[x]['untappd']['style']
+    #get_style = lambda x: d_beers[x]['untappd']['style']
+    get_style = lambda x: [d.get('style', '') for d in
+                           d_beers[x].values()]
+
     beerlst = ([beer for beer in beerlst if word_intersection(get_style(beer),
                                                               filter_by)]
                if filter_by else beerlst)
@@ -300,6 +321,8 @@ def alternate_main(beerlst, d_beermenus={}, fancy=False, sorted_=False,
                                                                     width=maxsitewidth + 2)
         print('\n[{}]{spacer}=={spacer}key\n'.format(sitetxt, spacer=SPACER))
 
+    return d_beers
+
 
 def get_parser():
 
@@ -322,6 +345,8 @@ def get_parser():
                         help='~*~print fancy~*~ (default: false)')
     parser.add_argument('-t', '--nthreads', type=int, default=4,
                         help='number of threads (default: 4)')
+    parser.add_argument('--interactive', action='store_true',
+                        help='start IPython interactive session (e.g. to get more beer info)? (default: false)')
     parser.add_argument('--verbose', action='store_true',
                         help='verbose printing (e.g. for debugging)? (default: false)')
     # parser.add_argument('--filter-by', type=float, default=0,
@@ -346,6 +371,7 @@ if __name__ == '__main__':
                sort_by=args.sort_by,
                filter_by=args.filter_by,
                nthreads=args.nthreads,
+               interactive=args.interactive,
                verbose=args.verbose,
                get_taps=(not args.just_cans),
                get_cans=(args.all or args.just_cans))

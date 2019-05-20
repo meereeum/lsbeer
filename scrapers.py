@@ -45,7 +45,7 @@ def get_beers(bar_url):
                   soup('p', class_='caption text-gray mb-0')]
 
     beer_servinginfos = [info.text.split('\n') for info in
-                         soup('p', class_='caption text-right mb-0 last')]
+                         soup('p', class_='caption text-right mb-0')]
 
     for beer_data in (beer_infos, beer_servinginfos):
         assert len(beer_names) == len(beer_data), '{} != {}'.format(

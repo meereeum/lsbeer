@@ -101,17 +101,16 @@ def get_reviews_ratebeer(query, beerpage=None):
 
     UNRATED = '0.00'
 
-
     data = {
         'query': 'query beerSearch($query: String, $order: SearchOrder, $first: Int, $after: ID) { searchResultsArr: beerSearch(query: $query, order: $order, first: $first, after: $after) { totalCount last items { beer { %s __typename } review { id score __typename } __typename   }   __typename } }' % (' '.join(FIELDS)),
-        'variables': {'query': query, 'order': 'MATCH', ' first': 20},
-        'operationName':'beerSearch'
+        'variables': {'query': query, 'order': 'MATCH', 'first': 20},
+        'operationName': 'beerSearch'
     }
     d_hits = (
         requests
         .post(BASE_URL_API,
-            data=json.dumps(data),
-            headers={'content-type': 'application/json'})
+              data=json.dumps(data),
+              headers={'content-type': 'application/json'})
         .json()['data']['searchResultsArr']
     )
 
@@ -340,11 +339,11 @@ def get_beerpages_en_masse(query):
     :returns: {site: beer_url} for subset of sites found
     """
 
-    D_SITES = {
-        'untappd': 'https://untappd.com/b/',
-        'ratebeer': 'https://www.ratebeer.com/beer/',
-        'beeradvocate': 'https://www.beeradvocate.com/beer/'
-    }
+    D_SITES = dict(
+        untappd = 'https://untappd.com/b/',
+        ratebeer = 'https://www.ratebeer.com/beer/',
+        beeradvocate = 'https://www.beeradvocate.com/beer/'
+    )
 
     BASE_URL = 'https://www.google.com/search'
     PARAMS = {'q': safe_encode(query)}

@@ -1,5 +1,6 @@
 import argparse
 from collections import defaultdict
+import re
 import sys
 
 from tqdm import tqdm
@@ -16,7 +17,7 @@ D_ACTIONS = {
 
 
 def get_d_stats(beer, verbose=False):
-# fn must be outer to be pickleable, and therefore eligible for multiprocessing
+    # fn must be outer to be pickleable, and therefore eligible for multiprocessing
 
     if verbose:
         print('looking up {} drinkability...'.format(beer.upper()))
@@ -69,7 +70,6 @@ def sort_beerlst(beerlst, d_beers, sorted_=False, sort_by=None):
     def get_avg_rating(beer):
         ratings = [float(d_stats['rating']) for d_stats in d_beers[beer].values()
                    if d_stats and d_stats.__contains__('rating')] # skip empty / not found
-                   # if d_stats and d_stats['rating']] # skip empty / not found
         try:
             avg = sum(ratings) / len(ratings)
         except(ZeroDivisionError):
@@ -80,8 +80,6 @@ def sort_beerlst(beerlst, d_beers, sorted_=False, sort_by=None):
     def get_rating_by_site(beer, site):
         try:
             rating = d_beers[beer][site]['rating']
-            # assert rating
-        # except(KeyError, AssertionError):
         except(KeyError):
             rating = -1 # no review found - list last
 
@@ -93,7 +91,7 @@ def sort_beerlst(beerlst, d_beers, sorted_=False, sort_by=None):
     return sorted(beerlst, key=KEY, reverse=True) # best -> worst
 
 
-def print_fancy(beer, d_stats, sep='|', spacer='  '):
+def print_fancy(beer, d_stats, sep='|', spacer='  ', **kwargs):
     PATTERN = '~*~'
     # SPACER = '  '
     # SEP = '|'
@@ -102,12 +100,12 @@ def print_fancy(beer, d_stats, sep='|', spacer='  '):
     #              if v} # skip empty / not found
 
     style = get_info_ranked('style')
-    abv = get_info_ranked('abv')
+    abv   = get_info_ranked('abv')
 
     # header
     print('\n{pattern} {} {pattern} ({}, {})\n'.format(beer,
-                                                       style, #d_stats['untappd']['style'],
-                                                       abv, #d_stats['untappd']['abv'],
+                                                       style,
+                                                       abv,
                                                        pattern=PATTERN))
 
     # reviews
@@ -168,14 +166,8 @@ def get_info_consensus(d_stats, k_info):
     pass
 
 
-def print_simple(beer, d_stats, maxwidth, sep='|', spacer='  '):
-    # SPACER = '  '
-    # SEP = '|'
-
-    # reviewtxt = '{sep}'.join(['{:^6}'] * len(d_stats)).format(
-    #     *(stats.get('rating', '') for stats in d_stats.values()),
-    #     sep=sep)
-    # reviewtxt = '{sep}'.join(['{:^6}'] * len(d_stats)).format(
+def print_simple(beer, d_stats, maxwidth, maxstylewidth, sep='|', spacer=' ',
+                 terse=True, **kwargs):
 
     reviewtxt = '{sep}'.join(['{:^6}'] * len(D_ACTIONS)).format(
         *(stats.get('rating', '') for site, stats in d_stats.items()
@@ -183,14 +175,19 @@ def print_simple(beer, d_stats, maxwidth, sep='|', spacer='  '):
         sep=sep)
 
     style = get_info_ranked(d_stats, 'style').lower()
-    abv = get_info_ranked(d_stats, 'abv')
+    abv   = get_info_ranked(d_stats, 'abv')
 
-    print('[{}]{spacer}{:<{width}}{spacer}({}, {})'.format(reviewtxt,
-                                                           beer,
-                                                           style,# d_stats['untappd']['style'].lower(),
-                                                           abv,# d_stats['untappd']['abv'],
-                                                           width=maxwidth,
-                                                           spacer=spacer))
+    if terse:
+        style = re.sub(' -.*$', '', style)
+
+    print('[{}]{spacer}{:<{width}}{spacer}({} · {})'.format(reviewtxt,
+    #print('[{}]{spacer}{:<{width}}{spacer}({:<{stylewidth}} · {:>3})'.format(reviewtxt,
+                                                            beer,
+                                                            style,
+                                                            abv,
+                                                            width=maxwidth,
+                                                            #stylewidth=maxstylewidth,
+                                                            spacer=spacer))
 
 
 @fail_gracefully
@@ -284,18 +281,17 @@ def alternate_main(beerlst, d_beermenus={}, fancy=False, sorted_=False,
 
     # print
     MAXWIDTH = max((len(beer) for beer in beerlst))
+    MAXSTYLEWIDTH = max((len(get_style(beer)) for beer in beerlst))
     SPACER = '  '
     SEP = '|'
 
-    kwargs = {'spacer': SPACER, 'sep': SEP}
-    if not fancy:
-        kwargs['maxwidth'] = MAXWIDTH
-
+    kwargs = dict(
+        spacer = SPACER,
+        sep = SEP,
+        maxwidth = MAXWIDTH,
+        maxstylewidth = MAXSTYLEWIDTH
+    )
     pprint = print_fancy if fancy else print_simple
-
-    # pprint = (print_fancy if fancy else
-    #           lambda *args, **kwargs: print_simple(
-    #               *args, **kwargs, maxwidth=MAXWIDTH))
 
     for beer in beerlst:
 
@@ -314,7 +310,6 @@ def alternate_main(beerlst, d_beermenus={}, fancy=False, sorted_=False,
 
     if with_key and not fancy: # print key
         sites = D_ACTIONS.keys()
-        # sites = d_stats.keys() # leftover from leaky for-loop scope
         maxsitewidth = max((len(site) for site in sites))
         sitetxt = '{sep}'.join(['{:^{width}}'] * len(sites)).format(*sites,
                                                                     sep=SEP,
@@ -333,7 +328,7 @@ def get_parser():
     parser.add_argument('--sorted', action='store_true',
                         help='sort by average rating? (default: false)')
     parser.add_argument('--sort-by', default=None,
-                        choices=D_ACTIONS.keys(), # ['untappd', 'ratebeer', 'beeradvocate'],
+                        choices=D_ACTIONS.keys(),
                         help='ratings website to sort by? (default: none)')
     parser.add_argument('--filter-by', nargs='*', default=[],
                         help='style/s to filter by? (default: all styles)')
@@ -358,7 +353,12 @@ if __name__ == '__main__':
     # parse args
     args = get_parser().parse_args()
 
-    assert args.bar or args.f, 'must supply bar or path/to/beerfile.. u drinking already ?'
+    try:
+        assert args.bar or args.f, 'must supply bar or path/to/beerfile.. u drinking already ?'
+    except(AssertionError) as e:
+        exit_txt, = e.args
+        print(exit_txt)
+        sys.exit(0)
 
     barquery = ' '.join(args.bar)
     beerfile = '\ '.join(args.f) # escape spaces

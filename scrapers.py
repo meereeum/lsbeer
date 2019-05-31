@@ -41,42 +41,39 @@ def get_beers(bar_url):
     beer_names = [beer.text for beer in beers
                   if beer.text != 'more'] # extra beer link
 
-    beer_infos = [info.text.split('\n') for info in
-                  soup('p', class_='caption text-gray mb-0')]
+    beer_infos = [p.text.strip().split(' · ')
+                  for p in soup('p', class_='caption text-gray mb-0')]
 
-    beer_servinginfos = [info.text.split('\n') for info in
-                         soup('p', class_='caption text-right mb-0')]
+    beer_servinginfos = [[p.text.strip().split('\n') for p in div('p')]
+                         for div in soup('div', class_='pure-u-1-3')[1:]]
+
+    #import IPython; IPython.embed()
 
     for beer_data in (beer_infos, beer_servinginfos):
         assert len(beer_names) == len(beer_data), '{} != {}'.format(
             len(beer_names), len(beer_data))
 
-    def get_info(idx, infolst):
-        try:
-            info = infolst[idx].strip()
-        except(IndexError):
-            info = ''
-        return info
-
-    beer_infos = [tuple(get_info(i, info) for i in (1,3,5)) # beerstyle, abv, beerplace
-                  for info in beer_infos]
-    beer_servinginfos = [tuple(flatten(get_info(i, info).lower().split(' ')
-                                       for i in (1,2))) # volume, servingtype, price
-                         for info in beer_servinginfos]
+    def make_tuple(lst, n):
+        lst = list(lst) + [''] * n # fallback if missing
+        return tuple(lst[i].strip() for i in range(n)) # n-tuple
 
     KEYS_INFO = ('style', 'abv', 'where')#, 'serving')
     KEYS_SERVINGINFO = ('volume', 'type', 'price')
 
-    to_dict = lambda ks, vs: {k: v for k,v in zip(ks,vs) if v is not ''}
+    # beerstyle, abv, beerplace
+    beer_infos = [make_tuple(info, len(KEYS_INFO)) for info in beer_infos]
+    # volume, servingtype, price
+    beer_servinginfos = [[make_tuple(info, len(KEYS_SERVINGINFO))
+                          for info in filter(None, infos)]
+                         for infos in beer_servinginfos]
 
     d_stats = {
-        beername: to_dict(
-            chain(KEYS_INFO, ('serving',)),
-            chain(info, ([],))
-        ) for beername, info in zip(beer_names, beer_infos)
-    }
-    for beername, servinginfo in zip(beer_names, beer_servinginfos):
-        d_stats[beername]['serving'].append(to_dict(KEYS_SERVINGINFO, servinginfo))
+        beername: dict(zip(chain(KEYS_INFO, ('serving',)),
+                           chain(info, ([dict(zip(KEYS_SERVINGINFO,
+                                                  servinginfo))
+                                         for servinginfo in servinginfos],))))
+        for beername, info, servinginfos in
+        zip(beer_names, beer_infos, beer_servinginfos)}
 
     return d_stats
 

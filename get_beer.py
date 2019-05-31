@@ -202,7 +202,7 @@ def outer_main(barquery=None, beerfile=None, get_taps=True, get_cans=False,
         kwargs['d_beermenus'] = d_beermenus
 
         def is_served_as(beer, *args):
-            servingtypes = set(d['type'] for d in d_beermenus[beer]['serving'])
+            servingtypes = {d['type'].lower() for d in d_beermenus[beer]['serving']}
             return any(arg in servingtypes for arg in args)
 
         is_on_tap = lambda beer: is_served_as(beer, 'draft', 'cask', 'crowler', 'growler')

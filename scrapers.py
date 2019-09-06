@@ -302,7 +302,7 @@ def get_reviews_beeradvocate(query, beerpage=None):
 
     try:
         assert soup.find('div', id='info_box').find('b').text == 'BEER INFO'
-    except(AssertionError): # e.g. google found place page
+    except(AttributeError, AssertionError): # e.g. google found place page
         return get_reviews_beeradvocate(query) if beerpage else {}
 
     # mean rating = "?" / 5 #"?/5.0"

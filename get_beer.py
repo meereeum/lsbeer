@@ -9,11 +9,13 @@ from CLIppy import fail_gracefully, flatten, get_from_file, safe_encode, soup_me
 
 from scrapers import get_bar, get_beers, get_reviews_ratebeer, get_reviews_untappd, get_reviews_beeradvocate, get_beerpages_en_masse
 
-D_ACTIONS = {
-    'untappd': get_reviews_untappd,
-    'ratebeer': get_reviews_ratebeer,
-    'beeradvocate': get_reviews_beeradvocate
-}
+
+
+D_ACTIONS = dict(
+    untappd = get_reviews_untappd,
+    ratebeer = get_reviews_ratebeer,
+    beeradvocate = get_reviews_beeradvocate
+)
 
 
 def get_d_stats(beer, verbose=False):

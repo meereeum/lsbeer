@@ -73,17 +73,20 @@ def get_beers(bar_url):
                                                   servinginfo))
                                          for servinginfo in servinginfos],))))
         for beername, info, servinginfos in
-        zip(beer_names, beer_infos, beer_servinginfos)}
-
+        zip(beer_names, beer_infos, beer_servinginfos)
+    }
     return d_stats
 
 
 # TODO wrapper to grab key from SECRETS ?
-def get_reviews_ratebeer(query, beerpage=None):
+def get_reviews_ratebeer(query, beerpage=None, verbose=False):
     """ Get beer stats
 
     :query: query beername str
     """
+    if verbose:
+        print('ratebeer...')
+
     BASE_URL_API = 'https://beta.ratebeer.com/v1/api/graphql/'
 
     FIELDS = [
@@ -199,11 +202,14 @@ def get_reviews_ratebeer(query, beerpage=None):
     return beer_stats
 
 
-def get_reviews_untappd(query, beerpage=None):
+def get_reviews_untappd(query, beerpage=None, verbose=False):
     """ Get beer stats
 
     :query: query beername str
     """
+    if verbose:
+        print('untappd...')
+
     BASE_URL = 'https://untappd.com/{}'
 
     UNRATED = 'N/A'
@@ -265,11 +271,14 @@ def get_reviews_untappd(query, beerpage=None):
     return beer_stats
 
 
-def get_reviews_beeradvocate(query, beerpage=None):
+def get_reviews_beeradvocate(query, beerpage=None, verbose=False):
     """ Get beer stats
 
     :query: query beername str
     """
+    if verbose:
+        print('beeradvocate...')
+
     BASE_URL = 'https://www.beeradvocate.com/{}'
 
     UNRATED = '0'

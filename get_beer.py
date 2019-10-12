@@ -26,8 +26,9 @@ def get_d_stats(beer, verbose=False):
 
     # dictionary of stats dictionaries
     d_stats = {
-        site: action(beer, beerpage=get_beerpages_en_masse(beer).get(
-            site, None)) # fallback is beerpage-specific search
+        site: action(beer, verbose=verbose,
+                     # fallback is beerpage-specific search
+                     beerpage=get_beerpages_en_masse(beer).get(site, None))
         for site, action in D_ACTIONS.items()
     }
 

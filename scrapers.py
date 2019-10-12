@@ -37,28 +37,32 @@ def get_beers(bar_url):
     """
     soup = soup_me(bar_url, from_headless=True)
 
-    beers = soup('a', href=re.compile('^/beers/'))
+    PATTERN = re.compile('^/beers/')
+    beers = [li for li in soup('li', class_='pure-list-item')
+             if li('a', href=PATTERN)]
 
-    beer_names = [beer.text for beer in beers
-                  if beer.text != 'more'] # extra beer link
+    beer_names = [beer.a.text for beer in beers]
 
-    beer_infos = [p.text.strip().split(' · ')
-                  for p in soup('p', class_='caption text-gray mb-0')]
+    beer_infos = [
+        (beer.find('p', class_='caption text-gray mb-0').text
+             .strip().split('·'))
+        for beer in beers
+    ]
 
-    beer_servinginfos = [[p.text.strip().split('\n') for p in div('p')]
-                         for div in soup('div', class_='pure-u-1-3')[1:]]
-
-    #import IPython; IPython.embed()
-
-    for beer_data in (beer_infos, beer_servinginfos):
-        assert len(beer_names) == len(beer_data), '{} != {}'.format(
-            len(beer_names), len(beer_data))
+    beer_servinginfos = [
+        [p.text.strip().split('\n') for p in
+         beer('p', class_='caption text-right mb-0')]
+        for beer in beers
+    ]
 
     def make_tuple(lst, n):
-        lst = list(lst) + [''] * n # fallback if missing
-        return tuple(lst[i].strip() for i in range(n)) # n-tuple
+        """ fill in missing info, and strip extraneous spaces
+        """
+        lst = list(lst) + [''] * n               # pad with fallback if missing
+        return tuple(_.strip() for _ in lst)[:n] # filter to n-tuple
 
-    KEYS_INFO = ('style', 'abv', 'where')#, 'serving')
+    # TODO when info missing, detect abv ([0-9]%) and use to calibrate rest ?
+    KEYS_INFO = ('style', 'abv', 'where') #, 'serving')
     KEYS_SERVINGINFO = ('volume', 'type', 'price')
 
     # beerstyle, abv, beerplace
@@ -249,6 +253,8 @@ def get_reviews_beeradvocate(query, beerpage=None, verbose=False):
 
         return BASE_URL.format(relative_url)
 
+    queried = beerpage is None
+
     try:
         beerpage = beerpage if beerpage is not None else get_beerpage(query)
     except(TypeError): # no hits
@@ -257,23 +263,27 @@ def get_reviews_beeradvocate(query, beerpage=None, verbose=False):
     soup = soup_me(beerpage)
 
     try:
-        assert soup.find('div', id='info_box').find('b').text == 'BEER INFO'
-    except(AttributeError, AssertionError): # e.g. google found place page
-        return get_reviews_beeradvocate(query) if beerpage else {}
+        assert 'beers' in {s.text.lower() for s in soup('span', itemprop='title')}
+    except(AssertionError): # i.e. place page rather than beer page
+        return (get_reviews_beeradvocate(query, verbose=verbose)
+                if not queried else {}) # if already tried querying beeradvocate, just leave
 
     # mean rating = "?" / 5 #"?/5.0"
     rating = soup.find('span', class_='ba-ravg').text
-    # rating = '' if rating == '0' else rating # i.e. not rated
+
+    stats = soup('dd', class_='beerstats')
 
     # abv = "?%"
-    abv = soup.find('b', text='Alcohol by volume (ABV):').next.next.strip()
+    abv, = [s.text.strip() for s in stats if s.find(
+        'span', title='Percentage of alcohol by volume.')]
 
     # style
-    style = soup.find('b', text='Style:').next.next.next.text
+    PATTERN = re.compile('^/beer/styles')
+    style, = [s.text.strip() for s in stats if s.find('a', href=PATTERN)]
 
     # where = "state, country"
-    where = ', '.join(tag.text for tag in soup('a', href=re.compile(
-        '^/place/directory/.')))
+    PATTERN = re.compile('^/place/directory')
+    where, = [s.text.strip() for s in stats if s.find('a', href=PATTERN)]
 
     beer_stats = {
         'abv': abv,

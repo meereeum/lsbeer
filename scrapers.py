@@ -50,7 +50,7 @@ def get_beers(bar_url):
     ]
 
     beer_servinginfos = [
-        [p.text.strip().split('\n') for p in
+        [p.text.strip().split() for p in
          beer('p', class_='caption text-right mb-0')]
         for beer in beers
     ]

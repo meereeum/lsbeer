@@ -211,7 +211,10 @@ def outer_main(barquery=None, beerfile=None, get_taps=True, get_cans=False,
         is_on_tap = lambda beer: is_served_as(beer, 'draft', 'cask', 'crowler', 'growler')
         is_bottled = lambda beer: is_served_as(beer, 'bottle', 'can')
 
-        beerlst = [beer for beer in d_beermenus.keys() if is_on_tap(beer)]
+        has_no_servinginfo = lambda beer: not d_beermenus[beer]['serving']
+
+        beerlst = [beer for beer in d_beermenus.keys() if (is_on_tap(beer) or
+                                                           has_no_servinginfo(beer))]
         beerlst_rest = [beer for beer in d_beermenus.keys() if is_bottled(beer)]
 
         if barname.lower() == 'covenhoven': # TODO drafts listed as bottle - eventually fix for good

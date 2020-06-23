@@ -105,6 +105,7 @@ def get_reviews_ratebeer(query, beerpage=None, verbose=False):
     ]
 
     UNRATED = '0.00'
+    UNABVED = None
 
     data = {
         'query': 'query beerSearch($query: String, $order: SearchOrder, $first: Int, $after: ID) { searchResultsArr: beerSearch(query: $query, order: $order, first: $first, after: $after) { totalCount last items { beer { %s __typename } review { id score __typename } __typename   }   __typename } }' % (' '.join(FIELDS)),
@@ -131,7 +132,10 @@ def get_reviews_ratebeer(query, beerpage=None, verbose=False):
         rating = UNRATED
 
     # abv = "?%"
-    abv = '{:.2f}%'.format(top_hit['abv'])
+    try:
+        abv = '{:.2f}%'.format(top_hit['abv'])
+    except(TypeError): # None
+        abv = UNABVED
 
     # TODO ?
     # style
@@ -141,13 +145,15 @@ def get_reviews_ratebeer(query, beerpage=None, verbose=False):
     description = top_hit['description']
 
     beer_stats = {
-        'abv': abv,
+        # 'abv': abv,
         'description': description
         # 'style': style,
         # 'where': where,
     }
     if rating != UNRATED:
         beer_stats['rating'] = rating
+    if abv != UNABVED:
+        beer_stats['abv'] = abv
 
     return beer_stats
 
@@ -233,6 +239,7 @@ def get_reviews_beeradvocate(query, beerpage=None, verbose=False):
     BASE_URL = 'https://www.beeradvocate.com/{}'
 
     UNRATED = '0'
+    UNABVED = None
 
     def get_beerpage(query):
         """
@@ -268,14 +275,17 @@ def get_reviews_beeradvocate(query, beerpage=None, verbose=False):
         return (get_reviews_beeradvocate(query, verbose=verbose)
                 if not queried else {}) # if already tried querying beeradvocate, just leave
 
-    # mean rating = "?" / 5 #"?/5.0"
+    # mean rating = "?" / 5 # "?/5.0"
     rating = soup.find('span', class_='ba-ravg').text
 
     stats = soup('dd', class_='beerstats')
 
     # abv = "?%"
-    abv, = [s.text.strip() for s in stats if s.find(
-        'span', title='Percentage of alcohol by volume.')]
+    try:
+        abv, = [s.text.strip() for s in stats if s.find(
+            'span', title='Percentage of alcohol by volume.')]
+    except(ValueError): # not reported
+        abv = UNABVED
 
     # style
     PATTERN = re.compile('^/beer/styles')
@@ -286,12 +296,14 @@ def get_reviews_beeradvocate(query, beerpage=None, verbose=False):
     where, = [s.text.strip() for s in stats if s.find('a', href=PATTERN)]
 
     beer_stats = {
-        'abv': abv,
+        # 'abv': abv,
         'style': style,
         'where': where
     }
     if rating != UNRATED:
         beer_stats['rating'] = rating
+    if abv != UNABVED:
+        beer_stats['abv'] = abv
 
     return beer_stats
 
